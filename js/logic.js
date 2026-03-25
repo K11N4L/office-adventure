@@ -111,7 +111,7 @@ function startGame() {
     // Add Karin and Rebecca NPCs to office
     rooms.office.npcs.push(
       { x: 1 * T, y: 3 * T, name: 'Karin', type: 'coworker', interactType: 'karin_quest',
-        roaming: false, originX: 1 * T, originY: 3 * T, sprite: 'karin',
+        roaming: false, originX: 1 * T, originY: 3 * T, sprite: 'karin_quest',
         dialogue: ["Karin: Hey Brayden! I've got some tasks for you if you're bored..."] },
       { x: 1 * T, y: 7 * T, name: 'Rebecca', type: 'coworker', interactType: 'rebecca_quest',
         roaming: false, originX: 1 * T, originY: 7 * T, sprite: 'rebecca',

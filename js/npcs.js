@@ -131,6 +131,96 @@ function drawNPC(npc) {
     drawPixelRect(x + w - 7, y + bob - 2, 4, 5, '#8a7a6a');
     drawPixelRect(x + 8, y + 6 + bob, 3, 3, '#111');
     drawPixelRect(x + w - 11, y + 6 + bob, 3, 3, '#111');
+
+  } else if (npc.sprite === 'karin_quest') {
+    // Karin - quest giver, blonde hair, pink top, skirt, friendly look
+    const skinCol = '#f0c8a0', hairCol = '#d4a840', topCol = '#cc6688', topDark = '#aa5070';
+    const skirtCol = '#3a3a5a', shoeCol = '#4a2a2a';
+    // Shoes
+    drawPixelRect(x + 5, y + h - 4, 7, 5, shoeCol);
+    drawPixelRect(x + w - 12, y + h - 4, 7, 5, shoeCol);
+    // Legs
+    drawPixelRect(x + 6, y + h - 10, 5, 8, skinCol);
+    drawPixelRect(x + w - 11, y + h - 10, 5, 8, skinCol);
+    // Skirt
+    drawPixelRect(x + 2, y + h - 16, w - 4, 8, skirtCol);
+    drawPixelRect(x + 4, y + h - 17, w - 8, 2, skirtCol);
+    // Top
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 28, topCol);
+    drawPixelRect(x + w/2 - 3, y + 12 + bob, 6, 3, topDark);
+    // Arms
+    drawPixelRect(x - 1, y + 12 + bob, 4, 10, topCol);
+    drawPixelRect(x + w - 3, y + 12 + bob, 4, 10, topCol);
+    drawPixelRect(x - 2, y + 21 + bob, 3, 3, skinCol);
+    drawPixelRect(x + w - 1, y + 21 + bob, 3, 3, skinCol);
+    // Head
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    // Hair - longer, flows past shoulders
+    drawPixelRect(x + 4, y + bob - 4, w - 8, 7, hairCol);
+    drawPixelRect(x + 3, y + bob - 2, 4, 16, hairCol);
+    drawPixelRect(x + w - 7, y + bob - 2, 4, 16, hairCol);
+    // Eyes - bigger, friendly
+    drawPixelRect(x + 8, y + 5 + bob, 3, 3, '#4a7aaa');
+    drawPixelRect(x + w - 11, y + 5 + bob, 3, 3, '#4a7aaa');
+    drawPixelRect(x + 9, y + 6 + bob, 1, 1, '#111');
+    drawPixelRect(x + w - 10, y + 6 + bob, 1, 1, '#111');
+    // Eyelashes
+    drawPixelRect(x + 7, y + 4 + bob, 5, 1, '#3a3a3a');
+    drawPixelRect(x + w - 12, y + 4 + bob, 5, 1, '#3a3a3a');
+    // Smile
+    drawPixelRect(x + 9, y + 10 + bob, 6, 1, '#c08070');
+    drawPixelRect(x + 10, y + 11 + bob, 4, 1, '#c08070');
+    // Lipstick hint
+    drawPixelRect(x + 9, y + 10 + bob, 6, 1, '#cc5566');
+
+  } else if (npc.sprite === 'rebecca') {
+    // Rebecca - quest giver, dark curly hair, blue blouse, smart look
+    const skinCol = '#c8a080', hairCol = '#2a1a1a', blouseCol = '#4a6aaa', blouseDark = '#3a5a8a';
+    const skirtCol = '#4a4a4a', shoeCol = '#3a2a2a';
+    // Shoes
+    drawPixelRect(x + 5, y + h - 4, 7, 5, shoeCol);
+    drawPixelRect(x + w - 12, y + h - 4, 7, 5, shoeCol);
+    // Legs
+    drawPixelRect(x + 6, y + h - 10, 5, 8, skinCol);
+    drawPixelRect(x + w - 11, y + h - 10, 5, 8, skinCol);
+    // Skirt
+    drawPixelRect(x + 3, y + h - 16, w - 6, 8, skirtCol);
+    drawPixelRect(x + 5, y + h - 17, w - 10, 2, skirtCol);
+    // Blouse
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 28, blouseCol);
+    drawPixelRect(x + w/2 - 2, y + 11 + bob, 4, 2, '#fff');
+    drawPixelRect(x + w/2 - 2, y + 14 + bob, 4, 2, '#fff');
+    drawPixelRect(x + w/2 - 2, y + 17 + bob, 4, 2, '#fff');
+    // Arms
+    drawPixelRect(x - 1, y + 12 + bob, 4, 10, blouseCol);
+    drawPixelRect(x + w - 3, y + 12 + bob, 4, 10, blouseCol);
+    drawPixelRect(x - 2, y + 21 + bob, 3, 3, skinCol);
+    drawPixelRect(x + w - 1, y + 21 + bob, 3, 3, skinCol);
+    // Head
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    // Curly dark hair - voluminous
+    drawPixelRect(x + 3, y + bob - 5, w - 6, 8, hairCol);
+    drawPixelRect(x + 2, y + bob - 3, 5, 18, hairCol);
+    drawPixelRect(x + w - 7, y + bob - 3, 5, 18, hairCol);
+    // Curly texture (small highlight dots in hair)
+    drawPixelRect(x + 3, y + bob + 2, 2, 2, '#4a3a2a');
+    drawPixelRect(x + w - 5, y + bob + 4, 2, 2, '#4a3a2a');
+    drawPixelRect(x + 4, y + bob + 8, 2, 2, '#4a3a2a');
+    drawPixelRect(x + w - 6, y + bob + 10, 2, 2, '#4a3a2a');
+    // Eyes - warm brown
+    drawPixelRect(x + 8, y + 5 + bob, 3, 3, '#6a4a2a');
+    drawPixelRect(x + w - 11, y + 5 + bob, 3, 3, '#6a4a2a');
+    drawPixelRect(x + 9, y + 6 + bob, 1, 1, '#111');
+    drawPixelRect(x + w - 10, y + 6 + bob, 1, 1, '#111');
+    // Eyelashes
+    drawPixelRect(x + 7, y + 4 + bob, 5, 1, '#2a2a2a');
+    drawPixelRect(x + w - 12, y + 4 + bob, 5, 1, '#2a2a2a');
+    // Smile
+    drawPixelRect(x + 9, y + 10 + bob, 6, 1, '#b07060');
+    drawPixelRect(x + 10, y + 11 + bob, 4, 1, '#b07060');
+    // Earrings
+    drawPixelRect(x + 4, y + 8 + bob, 2, 3, '#daa520');
+    drawPixelRect(x + w - 6, y + 8 + bob, 2, 3, '#daa520');
   }
 
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
