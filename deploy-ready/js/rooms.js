@@ -233,42 +233,4 @@ const rooms = {
     ],
     winTiles: [{x:2,y:1},{x:6,y:1},{x:10,y:1}],
   },
-
-  pub: {
-    name: 'The Pub',
-    playerStart: { x: 7 * T, y: 9 * T },
-    grid: [
-      // Cozy pub interior with bar counter, tables, stools
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
-      [1, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 7, 1],
-      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
-      [1, 7, 7, 3, 7, 7, 2, 3, 7, 7, 3, 2, 7, 7, 7, 1],
-      [1, 7, 7, 3, 7, 7, 7, 7, 7, 7, 3, 7, 7, 7, 7, 1],
-      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
-      [1,13, 7, 7, 2, 3, 7, 7, 7, 3, 2, 7, 7,13, 1],
-      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
-      [1, 7, 7, 7, 7, 7, 7, 4, 7, 7, 7, 7, 7, 7, 7, 1],
-      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    ],
-    doors: [
-      { x: 7, y: 9, toRoom: 'lobby', toX: 3, toY: 10, label: 'Back to Office Building' },
-    ],
-    npcs: [
-      { x: 3 * T, y: 3 * T, name: 'Andrew', type: 'coworker', interactType: 'andrew_pub',
-        roaming: true, roamSpeed: 0.06, roamTarget: null, roamTimer: 0,
-        originX: 3 * T, originY: 3 * T, sprite: 'andrew',
-        dialogue: ["Andrew: PUB! We made it! Want a pint?", "Andrew: This is where I belong..."] },
-      { x: 10 * T, y: 5 * T, name: 'Lax', type: 'coworker', interactType: 'lax_pub',
-        roaming: false, originX: 10 * T, originY: 5 * T, sprite: 'lax',
-        dialogue: ["Lax: *chilling with a beer* This is the life bro..."] },
-    ],
-    items: [
-      { x: 12 * T, y: 7 * T, name: 'Pub Snacks', type: 'pickup', itemType: 'pub_snacks', collected: false },
-      { x: 2 * T, y: 5 * T, name: 'Beer Mat', type: 'pickup', itemType: 'beer_mat', collected: false },
-      { x: 7 * T, y: 1 * T, name: 'Dart', type: 'pickup', itemType: 'dart', collected: false },
-    ],
-    enemies: [],
-  },
 };

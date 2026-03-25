@@ -1,0 +1,3589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Adventure - The Toilet Quest</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: monospace; overflow: hidden; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; border: 3px solid #333; }
+  #gameContainer { position: relative; display: flex; flex-direction: column; align-items: center; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="game" width="800" height="600"></canvas>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const TILE = 16;
+const SCALE = 3;
+const T = TILE * SCALE;
+const COLS = Math.floor(canvas.width / T);
+const ROWS = Math.floor(canvas.height / T);
+
+// --- COLORS ---
+const C = {
+  floor: '#c8b88a', floorAlt: '#bfae7f',
+  wall: '#6b6b6b', wallTop: '#7a7a7a', wallDark: '#4a4a4a',
+  door: '#d4a017', doorFrame: '#8b7300', doorLocked: '#8a4a3a',
+  desk: '#6b3a1f', deskTop: '#8b5a2b',
+  monitor: '#2a2a2a', monitorScreen: '#3a7a3a', monitorScreenOff: '#1a3a1a',
+  chair: '#666', chairSeat: '#555',
+  fridge: '#2a5a2a', fridgeLight: '#3a7a3a', fridgeHandle: '#888',
+  player: '#b8d4e8', playerShirt: '#b8d4e8', playerTie: '#c8952a', playerTrousers: '#c8b878',
+  playerSkin: '#f0c8a0', playerHair: '#d4b050', playerSneak: '#8aaabb',
+  playerShoes: '#4a3a2a',
+  shadow: 'rgba(0,0,0,0.15)',
+  uiBg: 'rgba(0,0,0,0.8)', uiBorder: '#666',
+  stamina: '#4a9a4a', staminaLow: '#9a4a4a',
+  workMeter: '#4a6a9a', workMeterLow: '#9a4a2a',
+  toiletMeter: '#9a6a2a', toiletMeterHigh: '#cc3333',
+};
+
+// --- TILE TYPES ---
+const TILE_FLOOR = 0, TILE_WALL = 1, TILE_DESK = 2, TILE_CHAIR = 3;
+const TILE_DOOR = 4, TILE_MONITOR = 5, TILE_FRIDGE = 6;
+const TILE_CORR_FLOOR = 7, TILE_TOILET = 8, TILE_SINK = 9;
+const TILE_KITCHEN = 10, TILE_CARPET = 11, TILE_DOOR_LOCKED = 12;
+const TILE_PLANT = 13, TILE_WATER_COOLER = 14, TILE_COPIER = 15, TILE_SOFA = 16, TILE_EXIT_DOOR = 17;
+const TILE_WET_FLOOR = 18;
+
+
+// --- GAME STATE ---
+const game = {
+  state: 'title',
+  currentRoom: 'office',
+  level: 1,
+  levelSelectIndex: 0, // 0 = Level 1, 1 = Level 2, 2 = Free Roam
+  time: 600,
+  maxTime: 600,
+  workMeter: 0,
+  maxWork: 100,
+  workThreshold: 60,
+  workFillRate: 5,
+  isWorking: false,
+  workTask: '',
+  workTaskTimer: 0,
+  toiletMeter: 0,
+  maxToilet: 100,
+  toiletRiseRate: 0.28,
+  officeDoorUnlocked: false,
+  frameCount: 0,
+  dialogueQueue: [],
+  currentDialogue: null,
+  gameOverReason: '',
+  titleBlink: 0,
+  saltAmmo: 0,
+  saltMax: 10,
+  saltProjectiles: [],
+  fridgeItems: ['salt', 'beer', 'energy_drink'],
+  fridgeMenuIndex: 0,
+  energyDrinkWorkTimer: 0,
+  energyDrinkToiletTimer: 0,
+  npcMenuOptions: [],
+  npcMenuIndex: 0,
+  npcMenuTarget: null,
+  // Speech bubble quips
+  speechBubbles: [], // {text, x, y, timer, color}
+  quipTimer: 0,
+  // Stealth & distractions
+  paperBalls: [], // {x, y, dx, dy, timer}
+  // Random events
+  randomEventTimer: 30,
+  currentEvent: null, // {type, timer, data}
+  // Email popups
+  emailNotifications: [], // {text, timer}
+  emailTimer: 20,
+  // Delivery driver
+  deliveryDriverMoved: false,
+  // Occupied cubicle
+  occupiedCubicle: -1, // index of occupied winTile, -1 = none
+  // Free roam mode
+  mode: 'normal', // 'normal' or 'freeroam'
+  quests: [], // [{id, name, description, itemNeeded, giver, completed, reward, rewardDesc}]
+  activeQuest: null,
+  questLog: [],
+  gold: 0, // work progress currency for vendor
+  // Vendor
+  vendorItems: [],
+  vendorMenuIndex: 0,
+};
+
+// --- RANDOM QUIPS ---
+const QUIPS = {
+  brayden: [
+    "I'm touching cloth...", "This is an EMERGENCY!", "Why is every toilet so far?!",
+    "I should NOT have had that curry...", "Clench... CLENCH!!", "If I don't make it...",
+    "My kingdom for a toilet!", "Prairie dogging it!", "Not now, not here...",
+    "Sweet mother of bowels...", "I can feel it moving...", "Hold it together Brayden!",
+    "Why did I eat that kebab?!", "This is code brown!", "Turtle heading...",
+  ],
+  andrew: {
+    close: ["PUB!!!", "I CAN SMELL YOU!", "ONE PINT WON'T HURT!"],
+    medium: ["Puuuub?", "Fancy a pint?", "Just one drink?"],
+    far: ["...pub...", "...thirsty...", "*shuffles toward you*"],
+  },
+  kunal: [
+    "You look rough mate", "Is that sweat?!", "Bro why you walking like that?",
+    "You alright? You've gone pale", "Mate you're clenching", "Your face is green bro",
+    "Are you... waddling?", "Bro just go outside", "You smell weird",
+  ],
+  lax: [
+    "Chill bro", "Want some food?", "You're walking funny", "Bro relax",
+    "Take a breather", "Have a sandwich", "Why the rush?", "Bro sit down",
+    "You need fibre in your diet", "Is that a sweat patch?",
+  ],
+};
+
+// --- PLAYER ---
+const player = {
+  x: 0, y: 0,
+  w: T * 0.6, h: T * 0.85,
+  speed: 1.0, sneakSpeed: 0.5,
+  facing: 'down',
+  sneaking: false,
+  stamina: 100, maxStamina: 100,
+  staminaDrain: 15, staminaRegen: 8,
+  inventory: [null, null],
+  walking: false,
+  canInteract: null,
+  _coffeeBoost: 0,
+  _headphoneTimer: 0,
+  isHiding: false,
+  imodiumTimer: 0,
+};
+
+// --- INPUT ---
+const keys = {};
+const justPressed = {};
+window.addEventListener('keydown', e => {
+  if (!keys[e.code]) justPressed[e.code] = true;
+  keys[e.key.toLowerCase()] = true;
+  keys[e.code] = true;
+
+  // Snapshot the state so that a state change mid-handler doesn't cascade
+  const st = game.state;
+
+  if (st === 'title') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.levelSelectIndex = (game.levelSelectIndex - 1 + 3) % 3;
+    } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.levelSelectIndex = (game.levelSelectIndex + 1) % 3;
+    } else if (e.code === 'Space' || e.code === 'Enter') {
+      if (game.levelSelectIndex === 2) {
+        game.level = 3;
+      } else {
+        game.level = game.levelSelectIndex + 1;
+      }
+      startGame();
+    }
+  } else if (st === 'playing') {
+    if (e.code === 'KeyE') tryInteract();
+    if (e.code === 'Digit1') useItem(0);
+    if (e.code === 'Digit2') useItem(1);
+    if (e.code === 'Space' && game.saltAmmo > 0) fireSalt();
+    if (e.code === 'KeyH') toggleHiding();
+    if (e.code === 'KeyQ') throwPaperBall();
+  } else if (st === 'interact' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE')) {
+    advanceDialogue();
+  } else if (st === 'fridgeMenu') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.fridgeMenuIndex = (game.fridgeMenuIndex - 1 + game.fridgeItems.length) % game.fridgeItems.length;
+    }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.fridgeMenuIndex = (game.fridgeMenuIndex + 1) % game.fridgeItems.length;
+    }
+    if (e.code === 'Enter' || e.code === 'KeyE') {
+      pickFromFridge();
+    }
+    if (e.code === 'Escape') {
+      game.state = 'playing';
+    }
+  } else if (st === 'npcMenu') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.npcMenuIndex = (game.npcMenuIndex - 1 + game.npcMenuOptions.length) % game.npcMenuOptions.length;
+    }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.npcMenuIndex = (game.npcMenuIndex + 1) % game.npcMenuOptions.length;
+    }
+    if (e.code === 'Enter' || e.code === 'KeyE') {
+      handleNpcMenuSelect();
+    }
+    if (e.code === 'Escape') {
+      game.state = 'playing';
+    }
+  } else if (st === 'vendorMenu') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.vendorMenuIndex = (game.vendorMenuIndex - 1 + game.vendorItems.length) % game.vendorItems.length;
+    }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.vendorMenuIndex = (game.vendorMenuIndex + 1) % game.vendorItems.length;
+    }
+    if (e.code === 'Enter' || e.code === 'KeyE') {
+      handleVendorBuy();
+    }
+    if (e.code === 'Escape') {
+      game.state = 'playing';
+    }
+  } else if ((st === 'pub' || st === 'win') && (e.code === 'Space' || e.code === 'Enter')) {
+    resetGame();
+  }
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => {
+  keys[e.key.toLowerCase()] = false;
+  keys[e.code] = false;
+});
+
+// --- FRIDGE ITEM DEFINITIONS ---
+const FRIDGE_ITEM_INFO = {
+  salt: { name: 'Table Salt', desc: 'Ranged weapon - 10 shots (SPACE to fire, 3 hits kills)', color: '#eee' },
+  beer: { name: 'Beer', desc: 'WARNING: You WILL end up at the pub', color: '#daa520' },
+  energy_drink: { name: 'Energy Drink', desc: 'Work faster (10s) + toilet fills faster (15s)', color: '#2a8a2a' },
+};
+
+
+// --- ROOM DEFINITIONS ---
+const rooms = {
+  office: {
+    name: 'Your Office',
+    grid: [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0,12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 3, 2, 5, 0, 0, 0, 5, 2, 3, 0,13, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 3, 2, 5, 0, 0, 0, 5, 2, 3, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 6, 0, 3, 2, 5, 0, 0, 0, 5, 2, 3, 0,13, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 3, 2, 5, 0, 0, 0, 5, 2, 3, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    doors: [
+      { x: 2, y: 1, toRoom: 'lobby', toX: 7, toY: 10, label: 'Office Door', locked: true }
+    ],
+    npcs: [
+      { x: 12 * T, y: 2.5 * T, name: 'Kunal', type: 'coworker', interactType: 'kunal_menu', dialogue: [
+        "Kunal: Yo Brayden! You look like you need to go somewhere urgently...",
+        "Kunal: Listen, check the fridge. I stashed some supplies in there.",
+        "Kunal: Salt, energy drinks... maybe avoid the beer though.",
+        "Kunal: Trust me, I'm resourceful like that.",
+      ], sprite: 'kunal' },
+      { x: 12 * T, y: 7.5 * T, name: 'Lax', type: 'coworker', interactType: 'lax_menu',
+        roaming: true, roamSpeed: 0.1, roamTarget: null, roamTimer: 0,
+        originX: 12 * T, originY: 7.5 * T,
+        dialogue: [
+        "Lax: *nods slowly, headphones half on*",
+        "Lax: ...you good bro?",
+        "Lax: The lobby's rough out there. Boss is patrolling.",
+        "Lax: Just stay chill. Sneak past them. You got this.",
+      ], sprite: 'lax' },
+    ],
+    items: [],
+    enemies: [
+      { x: 7 * T, y: 9 * T, name: 'Andrew', type: 'zombie',
+        speed: 0.05, range: T * 20, hp: 3, maxHp: 3, dead: false,
+        alerted: false, distracted: false, distractTimer: 0,
+        patrol: [{x: 7 * T, y: 9 * T}], patrolIndex: 0,
+        caught: "Andrew grabbed you and mumbled 'Pub?' You couldn't resist his zombie-like persistence... off to the pub you go!",
+        sprite: 'andrew', startX: 7 * T, startY: 9 * T },
+    ],
+    playerStart: { x: 6.5 * T, y: 5 * T },
+  },
+
+  lobby: {
+    name: 'Communal Area',
+    grid: [
+      // Maze communal area: furniture corridors, sofas, copiers, plants
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1],
+      [1, 7, 7,13, 7, 7, 7, 2, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 7, 7, 7,15, 7, 2, 7, 7,13, 7, 7, 7, 7, 1],
+      [1, 7,16,16,16, 7, 7, 7, 7, 7, 7, 7,14, 7, 7, 1],
+      [1, 7, 7, 7, 7, 7,13, 7, 7, 2, 2, 7, 7, 7, 7, 1],
+      [1,13, 7, 7, 2, 2, 7, 7, 7, 3, 3, 7, 7,15, 7, 1],
+      [1, 7, 7, 7, 3, 7, 7,14, 7, 7, 7, 7,13, 7, 7, 1],
+      [1, 7,15, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 7, 7, 7,13, 7, 7, 7,16,16, 7, 7,13, 7, 1],
+      [1, 7,13, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 7, 4, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    doors: [
+      { x: 3, y: 10, toRoom: 'office', toX: 2, toY: 2, label: 'Back to Office' },
+      { x: 13, y: 0, toRoom: 'toiletHall', toX: 7, toY: 10, label: 'Toilet Hallway' },
+    ],
+    npcs: [
+      { x: 5 * T, y: 4 * T, name: 'Kunal', type: 'coworker', interactType: 'kunal_lobby',
+        sleeping: true, sprite: 'kunal',
+        originX: 5 * T, originY: 4 * T,
+        dialogue: ["Kunal: *snoring softly on the sofa*"] },
+      { x: 10 * T, y: 6 * T, name: 'Lax', type: 'coworker', interactType: 'lax_lobby',
+        roaming: true, roamSpeed: 0.12, roamTarget: null, roamTimer: 0,
+        chasePlayer: true, chaseSpeed: 0.1,
+        originX: 10 * T, originY: 6 * T,
+        sprite: 'lax',
+        dialogue: ["Lax: *holding a sandwich* Want a bite?"] },
+      { x: 8 * T, y: 5 * T, name: 'The Boss', type: 'coworker', interactType: 'boss_patrol',
+        roaming: true, roamSpeed: 0.08, roamTarget: null, roamTimer: 0,
+        originX: 8 * T, originY: 5 * T, sprite: 'boss',
+        detectionRange: T * 3, catchCooldown: 0,
+        dialogue: ["Boss: My office. NOW.", "Boss: What are you doing away from your desk?!"] },
+    ],
+    items: [
+      { x: 2 * T, y: 8 * T, name: 'Coffee', type: 'pickup', itemType: 'coffee', collected: false },
+      { x: 12 * T, y: 3 * T, name: 'Air Freshener', type: 'pickup', itemType: 'air_freshener', collected: false },
+    ],
+    enemies: [
+      { x: 2 * T, y: 2 * T, name: 'Andrew', type: 'zombie',
+        speed: 0.05, range: T * 20, hp: 3, maxHp: 3, dead: false,
+        alerted: false, distracted: false, distractTimer: 0,
+        patrol: [{x: 2 * T, y: 2 * T}], patrolIndex: 0,
+        caught: "Andrew cornered you in the communal area... 'Pub?' ...off you go!",
+        sprite: 'andrew', startX: 2 * T, startY: 2 * T },
+    ],
+  },
+
+  toiletHall: {
+    name: 'Toilet Hallway',
+    grid: [
+      // Maze hallway with obstacles between doors
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,13,11,11,11,11, 4,11,11,11,11,13,11,11, 1],
+      [1,11,11,11, 2,11,11,11,11,11, 2,11,11,11,11, 1],
+      [1,11,11,11, 2,11,13,11,13,11, 2,11,11,11,11, 1],
+      [1,11,13,11,11,11,11,11,11,11,11,11,15,11,11, 1],
+      [1,11,11,11,11, 2, 2,11,11, 2, 2,11,11,11,11, 1],
+      [1,11,11,13,11, 3, 3,11,11, 3, 3,11,13,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11, 4,11,11,11,11,17,11,11, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    doors: [
+      { x: 7, y: 10, toRoom: 'lobby', toX: 13, toY: 1, label: 'Back to Communal Area' },
+      { x: 7, y: 2, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Stairwell' },
+      { x: 12, y: 10, toRoom: 'pub_exit', toX: 0, toY: 0, label: 'Exit Building' },
+    ],
+    npcs: [
+      { x: 3 * T, y: 8 * T, name: 'Kunal', type: 'coworker', interactType: 'kunal_sleeping',
+        sleeping: true, sprite: 'kunal',
+        originX: 3 * T, originY: 8 * T,
+        dialogue: ["Kunal: *snoring on the floor*"] },
+      { x: 13 * T, y: 9 * T, name: 'Lax', type: 'coworker', interactType: 'lax_hall',
+        roaming: false, chasePlayer: true, chaseSpeed: 0.08,
+        originX: 13 * T, originY: 9 * T,
+        sprite: 'lax',
+        dialogue: ["Lax: The exit's right there bro... just leave with us."] },
+      { x: 5 * T, y: 5 * T, name: 'Karen', type: 'coworker', interactType: 'karen_block',
+        roaming: false, originX: 5 * T, originY: 5 * T, sprite: 'karen',
+        autoInteract: true, autoRange: T * 2, interacted: false,
+        dialogue: ["Karen: Excuse me! Have you filled in your timesheet?", "Brayden: Uhh...", "Karen: I need it by end of day. NO EXCEPTIONS.", "*Lost 30 seconds dealing with HR*"] },
+      { x: 10 * T, y: 7 * T, name: 'Greg', type: 'coworker', interactType: 'greg_story',
+        roaming: false, originX: 10 * T, originY: 7 * T, sprite: 'greg',
+        autoInteract: true, autoRange: T * 2, storyActive: false,
+        dialogue: ["Greg: Oh hey! Did I tell you about my weekend?", "Greg: So we're at Wetherspoons right, and Dave says...", "Greg: ...anyway long story short the kebab was OFF...", "Greg: ...and THAT'S why you never trust a man with two watches.", "*Greg talked for ages. Lost 30 seconds!*"] },
+    ],
+    items: [
+      { x: 3 * T, y: 5 * T, name: 'Imodium', type: 'pickup', itemType: 'imodium', collected: false },
+      { x: 11 * T, y: 3 * T, name: 'Headphones', type: 'pickup', itemType: 'headphones', collected: false },
+    ],
+    enemies: [
+      { x: 7 * T, y: 3 * T, name: 'Andrew', type: 'zombie',
+        speed: 0.05, range: T * 20, hp: 3, maxHp: 3, dead: false,
+        alerted: false, distracted: false, distractTimer: 0,
+        patrol: [{x: 7 * T, y: 3 * T}], patrolIndex: 0,
+        caught: "Andrew blocked the hallway... 'Pub?' There was no escape this time.",
+        sprite: 'andrew', startX: 7 * T, startY: 3 * T },
+    ],
+  },
+
+  stairwell: {
+    name: 'Stairwell',
+    playerStart: { x: 7 * T, y: 9 * T },
+    grid: [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1,11,11,11, 1,11,11, 4,11,11, 1,11,11,11,11, 1],
+      [1,11, 2,11, 1,11, 3,11, 3,11, 1,11, 2,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,13, 1],
+      [1,13,11, 3,11, 2,11,11,11, 2,11, 3,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11, 2,11, 1],
+      [1,11, 2,11, 3,11,11,11,11,11, 3,11, 2,11,11, 1],
+      [1,11,11,11,11,11,13,11,13,11,11,11,11,11,11, 1],
+      [1,11, 3,11, 2,11,11,11,11,11, 2,11, 3,11,11, 1],
+      [1,11,11,11,11,11,11, 4,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    doors: [
+      { x: 7, y: 1, toRoom: 'toiletHall', toX: 7, toY: 3, label: 'Back to Hallway' },
+      { x: 7, y: 9, toRoom: 'toiletArea', toX: 7, toY: 9, label: 'To the Toilets!' },
+    ],
+    npcs: [
+      { x: 5 * T, y: 7 * T, name: 'Kunal', type: 'coworker', interactType: 'kunal_sleeping',
+        sleeping: true, sprite: 'kunal',
+        originX: 5 * T, originY: 7 * T,
+        dialogue: ["Kunal: *snoring on the floor*"] },
+      { x: 7 * T, y: 5 * T, name: 'Delivery Guy', type: 'coworker', interactType: 'delivery_driver',
+        roaming: false, originX: 7 * T, originY: 5 * T, sprite: 'delivery',
+        blocking: true,
+        dialogue: ["Driver: Oi mate, package for... *squints* ...Brayden?", "Brayden: That's me, give it here!", "Driver: Sign this. *hands clipboard*", "Brayden: *scribbles* CAN I GO NOW", "Driver: Alright alright, no need to clench..."] },
+    ],
+    items: [
+      { x: 2 * T, y: 3 * T, name: 'Coffee', type: 'pickup', itemType: 'coffee', collected: false },
+      { x: 13 * T, y: 7 * T, name: 'Headphones', type: 'pickup', itemType: 'headphones', collected: false },
+    ],
+    enemies: [
+      { x: 12 * T, y: 3 * T, name: 'Andrew', type: 'zombie',
+        speed: 0.04, range: T * 20, hp: 3, maxHp: 3, dead: false,
+        alerted: false, distracted: false, distractTimer: 0,
+        patrol: [{x: 12*T, y: 3*T}, {x: 3*T, y: 8*T}], patrolIndex: 0,
+        caught: "Andrew cornered you in the stairwell! 'Pub?' He's been waiting here the whole time...",
+        sprite: 'andrew', startX: 12 * T, startY: 3 * T },
+    ],
+  },
+
+  toiletArea: {
+    name: 'THE BATHROOM',
+    grid: [
+      // Bathroom with cubicle partitions (walls), sinks, and stalls
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1,11, 8,11, 1,11, 8,11, 1,11, 8,11, 1, 9, 9, 1],
+      [1,11,11,11, 1,11,11,11, 1,11,11,11, 1, 9, 9, 1],
+      [1,11,11,11, 1,11,11,11, 1,11,11,11, 1,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11, 4,11,11,11,11,11,11,11, 1],
+      [1,11,11,11,11,11,11,11,11,11,11,11,11,11,11, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    doors: [
+      { x: 7, y: 9, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Back to Stairwell' },
+    ],
+    npcs: [],
+    items: [],
+    enemies: [
+      // Andrew roams in the bathroom too
+      { x: 8 * T, y: 6 * T, name: 'Andrew', type: 'zombie',
+        speed: 0.03, range: T * 20, hp: 3, maxHp: 3, dead: false,
+        alerted: false, distracted: false, distractTimer: 0,
+        patrol: [{x: 8 * T, y: 6 * T}], patrolIndex: 0,
+        caught: "Andrew followed you into the bathroom! 'Pub?' Even here you can't escape... off to the pub.",
+        sprite: 'andrew', startX: 8 * T, startY: 6 * T },
+    ],
+    winTiles: [{x:2,y:1},{x:6,y:1},{x:10,y:1}],
+  },
+
+  pub: {
+    name: 'The Pub',
+    playerStart: { x: 7 * T, y: 9 * T },
+    grid: [
+      // Cozy pub interior with bar counter, tables, stools
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 7, 1],
+      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 7, 3, 7, 7, 2, 3, 7, 7, 3, 2, 7, 7, 7, 1],
+      [1, 7, 7, 3, 7, 7, 7, 7, 7, 7, 3, 7, 7, 7, 7, 1],
+      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1,13, 7, 7, 2, 3, 7, 7, 7, 3, 2, 7, 7,13, 1],
+      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 7, 7, 7, 7, 7, 4, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    doors: [
+      { x: 7, y: 9, toRoom: 'lobby', toX: 3, toY: 10, label: 'Back to Office Building' },
+    ],
+    npcs: [
+      { x: 3 * T, y: 3 * T, name: 'Andrew', type: 'coworker', interactType: 'andrew_pub',
+        roaming: true, roamSpeed: 0.06, roamTarget: null, roamTimer: 0,
+        originX: 3 * T, originY: 3 * T, sprite: 'andrew',
+        dialogue: ["Andrew: PUB! We made it! Want a pint?", "Andrew: This is where I belong..."] },
+      { x: 10 * T, y: 5 * T, name: 'Lax', type: 'coworker', interactType: 'lax_pub',
+        roaming: false, originX: 10 * T, originY: 5 * T, sprite: 'lax',
+        dialogue: ["Lax: *chilling with a beer* This is the life bro..."] },
+    ],
+    items: [
+      { x: 12 * T, y: 7 * T, name: 'Pub Snacks', type: 'pickup', itemType: 'pub_snacks', collected: false },
+      { x: 2 * T, y: 5 * T, name: 'Beer Mat', type: 'pickup', itemType: 'beer_mat', collected: false },
+      { x: 7 * T, y: 1 * T, name: 'Dart', type: 'pickup', itemType: 'dart', collected: false },
+    ],
+    enemies: [],
+  },
+};
+
+
+function isSolid(tileType) {
+  return [TILE_WALL, TILE_DESK, TILE_FRIDGE, TILE_KITCHEN, TILE_MONITOR, TILE_SINK, TILE_COPIER, TILE_SOFA, TILE_PLANT, TILE_WATER_COOLER, TILE_WET_FLOOR].includes(tileType)
+    || (tileType === TILE_DOOR_LOCKED && !game.officeDoorUnlocked);
+}
+
+function getTile(room, px, py) {
+  const gx = Math.floor(px / T), gy = Math.floor(py / T);
+  if (gy < 0 || gy >= ROWS || gx < 0 || gx >= COLS) return TILE_WALL;
+  return room.grid[gy][gx];
+}
+
+function canMoveTo(nx, ny, w, h) {
+  const room = rooms[game.currentRoom];
+  const margin = 4;
+  const points = [
+    { x: nx + margin, y: ny + margin },
+    { x: nx + w - margin, y: ny + margin },
+    { x: nx + margin, y: ny + h - margin },
+    { x: nx + w - margin, y: ny + h - margin },
+  ];
+  for (const p of points) {
+    if (isSolid(getTile(room, p.x, p.y))) return false;
+  }
+  return true;
+}
+
+
+function drawPixelRect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+}
+
+function drawTile(tileType, px, py) {
+  const x = px * T, y = py * T;
+  switch(tileType) {
+    case TILE_FLOOR:
+      drawPixelRect(x, y, T, T, (px + py) % 2 === 0 ? C.floor : C.floorAlt);
+      break;
+    case TILE_WALL:
+      drawPixelRect(x, y, T, T, C.wallDark);
+      drawPixelRect(x, y, T, T - 4, C.wall);
+      drawPixelRect(x + 2, y + 2, T - 4, 4, C.wallTop);
+      break;
+    case TILE_DESK:
+      drawPixelRect(x, y, T, T, (px + py) % 2 === 0 ? C.floor : C.floorAlt);
+      drawPixelRect(x + 2, y + 4, T - 4, T - 8, C.desk);
+      drawPixelRect(x + 4, y + 6, T - 8, T - 12, C.deskTop);
+      break;
+    case TILE_CHAIR:
+      drawPixelRect(x, y, T, T, (px + py) % 2 === 0 ? C.floor : C.floorAlt);
+      drawPixelRect(x + 10, y + 8, T - 20, T - 12, C.chair);
+      drawPixelRect(x + 12, y + 10, T - 24, T - 16, C.chairSeat);
+      drawPixelRect(x + 8, y + T - 8, 4, 4, '#444');
+      drawPixelRect(x + T - 12, y + T - 8, 4, 4, '#444');
+      break;
+    case TILE_DOOR:
+      drawPixelRect(x, y, T, T, (px + py) % 2 === 0 ? C.floor : C.floorAlt);
+      drawPixelRect(x + 4, y, T - 8, T, C.doorFrame);
+      drawPixelRect(x + 6, y + 2, T - 12, T - 4, C.door);
+      drawPixelRect(x + T - 14, y + T/2 - 2, 4, 6, '#888');
+      if (Math.sin(game.frameCount * 0.05) > 0) {
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+        ctx.fillRect(x, y, T, T);
+      }
+      break;
+    case TILE_DOOR_LOCKED:
+      drawPixelRect(x, y, T, T, (px + py) % 2 === 0 ? C.floor : C.floorAlt);
+      drawPixelRect(x + 4, y, T - 8, T, C.doorFrame);
+      if (game.officeDoorUnlocked) {
+        drawPixelRect(x + 6, y + 2, T - 12, T - 4, C.door);
+        if (Math.sin(game.frameCount * 0.05) > 0) {
+          ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+          ctx.fillRect(x, y, T, T);
+        }
+      } else {
+        drawPixelRect(x + 6, y + 2, T - 12, T - 4, C.doorLocked);
+        drawPixelRect(x + T/2 - 4, y + T/2 - 6, 8, 10, '#666');
+        drawPixelRect(x + T/2 - 2, y + T/2 - 4, 4, 6, '#444');
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x + T/2, y + T/2 - 6, 5, Math.PI, 0);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+      drawPixelRect(x + T - 14, y + T/2 - 2, 4, 6, '#888');
+      break;
+    case TILE_MONITOR:
+      drawPixelRect(x, y, T, T, (px + py) % 2 === 0 ? C.floor : C.floorAlt);
+      drawPixelRect(x + 10, y + 6, T - 20, T - 18, C.monitor);
+      const screenColor = Math.sin(game.frameCount * 0.03 + px) > 0 ? C.monitorScreen : C.monitorScreenOff;
+      drawPixelRect(x + 12, y + 8, T - 24, T - 24, screenColor);
+      drawPixelRect(x + T/2 - 3, y + T - 12, 6, 8, '#444');
+      break;
+    case TILE_FRIDGE:
+      drawPixelRect(x, y, T, T, C.fridge);
+      drawPixelRect(x + 2, y + 2, T - 4, T/2 - 2, C.fridgeLight);
+      drawPixelRect(x + 2, y + T/2 + 2, T - 4, T/2 - 4, C.fridgeLight);
+      drawPixelRect(x + T - 8, y + 8, 3, T - 16, C.fridgeHandle);
+      const fridgeDist = Math.hypot(player.x - x, player.y - y);
+      if (fridgeDist < T * 2 && game.state === 'playing' && game.currentRoom === 'office') {
+        const pulse = Math.sin(game.frameCount * 0.1) * 0.15 + 0.15;
+        ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+        ctx.fillRect(x, y, T, T);
+      }
+      break;
+    case TILE_CORR_FLOOR:
+      drawPixelRect(x, y, T, T, '#9a8a7a');
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(x + 1, y + 1, T - 2, T - 2);
+      break;
+    case TILE_TOILET:
+      drawPixelRect(x, y, T, T, '#e8e0d0');
+      drawPixelRect(x + 8, y + 4, T - 16, T - 8, '#fff');
+      drawPixelRect(x + 10, y + 6, T - 20, T - 14, '#e0e8ff');
+      drawPixelRect(x + 10, y + 2, T - 20, 6, '#eee');
+      const glow = Math.sin(game.frameCount * 0.08) * 0.15 + 0.15;
+      ctx.fillStyle = `rgba(255, 255, 100, ${glow})`;
+      ctx.fillRect(x, y, T, T);
+      break;
+    case TILE_SINK:
+      drawPixelRect(x, y, T, T, '#e8e0d0');
+      drawPixelRect(x + 6, y + 6, T - 12, T - 12, '#ccc');
+      drawPixelRect(x + 10, y + 10, T - 20, T - 20, '#aacaee');
+      drawPixelRect(x + T/2 - 2, y + 4, 4, 8, '#999');
+      break;
+    case TILE_CARPET:
+      drawPixelRect(x, y, T, T, '#e8e0d0');
+      break;
+    case TILE_PLANT:
+      drawPixelRect(x, y, T, T, '#9a8a7a');
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(x + 1, y + 1, T - 2, T - 2);
+      drawPixelRect(x + 12, y + T - 16, T - 24, 14, '#8a5a2a');
+      drawPixelRect(x + 8, y + 6, T - 16, T - 22, '#2a8a2a');
+      drawPixelRect(x + 14, y + 2, T - 28, 8, '#3a9a3a');
+      break;
+    case TILE_WATER_COOLER:
+      drawPixelRect(x, y, T, T, '#9a8a7a');
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(x + 1, y + 1, T - 2, T - 2);
+      drawPixelRect(x + 12, y + 10, T - 24, T - 14, '#ccc');
+      drawPixelRect(x + 14, y + 2, T - 28, 12, '#aaddff');
+      drawPixelRect(x + 16, y + 0, T - 32, 4, '#99ccee');
+      break;
+    case TILE_COPIER:
+      drawPixelRect(x, y, T, T, '#9a8a7a');
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(x + 1, y + 1, T - 2, T - 2);
+      drawPixelRect(x + 4, y + 8, T - 8, T - 12, '#555');
+      drawPixelRect(x + 6, y + 10, T - 12, 10, '#3a3a3a');
+      drawPixelRect(x + 8, y + T - 8, T - 16, 6, '#eee');
+      const copierBlink = game.frameCount % 120 < 10;
+      drawPixelRect(x + T - 12, y + 12, 4, 4, copierBlink ? '#f44' : '#4a4');
+      break;
+    case TILE_SOFA:
+      drawPixelRect(x, y, T, T, '#9a8a7a');
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(x + 1, y + 1, T - 2, T - 2);
+      drawPixelRect(x + 2, y + 8, T - 4, T - 12, '#6a4a2a');
+      drawPixelRect(x + 4, y + 10, T - 8, T - 18, '#8a6a3a');
+      drawPixelRect(x + 2, y + 4, T - 4, 8, '#5a3a1a');
+      drawPixelRect(x, y + 6, 4, T - 14, '#5a3a1a');
+      drawPixelRect(x + T - 4, y + 6, 4, T - 14, '#5a3a1a');
+      break;
+    case TILE_EXIT_DOOR:
+      drawPixelRect(x, y, T, T, '#9a8a7a');
+      drawPixelRect(x + 4, y, T - 8, T, '#8b7300');
+      drawPixelRect(x + 6, y + 2, T - 12, T - 4, '#aa3333');
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('EXIT', x + T/2, y + T/2 + 3);
+      ctx.textAlign = 'left';
+      drawPixelRect(x + T - 14, y + T/2 - 2, 4, 6, '#888');
+      if (Math.sin(game.frameCount * 0.08) > 0) {
+        ctx.fillStyle = 'rgba(255, 60, 60, 0.12)';
+        ctx.fillRect(x, y, T, T);
+      }
+      break;
+    case TILE_WET_FLOOR:
+      drawPixelRect(x, y, T, T, '#e8e0d0');
+      // Yellow warning triangle
+      ctx.fillStyle = '#ffff00';
+      ctx.beginPath();
+      ctx.moveTo(x + T/2, y + 2);
+      ctx.lineTo(x + T - 2, y + T - 2);
+      ctx.lineTo(x + 2, y + T - 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#cc9900';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      break;
+  }
+}
+
+function drawRoom() {
+  const room = rooms[game.currentRoom];
+  for (let py = 0; py < ROWS; py++)
+    for (let px = 0; px < COLS; px++)
+      if (room.grid[py] && room.grid[py][px] !== undefined)
+        drawTile(room.grid[py][px], px, py);
+
+  // Draw occupied cubicle markers
+  if (game.currentRoom === 'toiletArea' && room.winTiles && game.occupiedCubicle >= 0) {
+    const wt = room.winTiles[game.occupiedCubicle];
+    const x = wt.x * T, y = wt.y * T;
+    ctx.fillStyle = '#cc3333';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('OCCUPIED', x + T/2, y + T - 4);
+    ctx.textAlign = 'left';
+  }
+}
+
+
+
+function drawPlayer() {
+  const px = player.x, py = player.y, w = player.w, h = player.h;
+
+  if (player.isHiding) {
+    ctx.globalAlpha = 0.3;
+    // Draw smaller crouching version
+    drawPixelRect(px + 4, py + 15, player.w - 8, player.h - 15, C.playerShirt);
+    drawPixelRect(px + 6, py + 12, player.w - 12, 8, C.playerSkin);
+    drawPixelRect(px + 5, py + 10, player.w - 10, 5, C.playerHair);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(100, 200, 255, 0.7)'; ctx.font = 'bold 10px monospace';
+    ctx.fillText('HIDING', px - 2, py + 6);
+    return;
+  }
+
+  ctx.fillStyle = C.shadow;
+  ctx.beginPath();
+  ctx.ellipse(px + w/2, py + h, w/2, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = player.sneaking ? 0.7 : 1;
+  const bob = player.walking ? Math.sin(game.frameCount * 0.3) * 2 : 0;
+  const sneakCrouch = player.sneaking ? 6 : 0;
+  const bY = py + bob + sneakCrouch;
+
+  const shoeY = py + h - 4;
+  if (player.walking) {
+    const legAnim = Math.sin(game.frameCount * 0.3) * 3;
+    drawPixelRect(px + 3, shoeY, 7, 4, C.playerShoes);
+    drawPixelRect(px + w - 10, shoeY + legAnim * 0.5, 7, 4, C.playerShoes);
+  } else {
+    drawPixelRect(px + 3, shoeY, 7, 4, C.playerShoes);
+    drawPixelRect(px + w - 10, shoeY, 7, 4, C.playerShoes);
+  }
+
+  const trouserTop = bY + 22;
+  const trouserH = h - 26 - sneakCrouch;
+  if (player.walking) {
+    const legAnim = Math.sin(game.frameCount * 0.3) * 3;
+    drawPixelRect(px + 3, trouserTop, 7, trouserH, C.playerTrousers);
+    drawPixelRect(px + w - 10, trouserTop + legAnim * 0.3, 7, trouserH, C.playerTrousers);
+  } else {
+    drawPixelRect(px + 3, trouserTop, 7, trouserH, C.playerTrousers);
+    drawPixelRect(px + w - 10, trouserTop, 7, trouserH, C.playerTrousers);
+  }
+
+  drawPixelRect(px + 2, trouserTop - 1, w - 4, 3, '#6a5a3a');
+  drawPixelRect(px + w/2 - 2, trouserTop - 1, 4, 3, '#8a7a4a');
+
+  drawPixelRect(px + 2, bY + 10, w - 4, 13, C.playerShirt);
+  drawPixelRect(px + 4, bY + 10, 4, 3, '#d0e8f8');
+  drawPixelRect(px + w - 8, bY + 10, 4, 3, '#d0e8f8');
+
+  drawPixelRect(px + w/2 - 2, bY + 12, 3, 10, C.playerTie);
+  drawPixelRect(px + w/2 - 3, bY + 21, 5, 3, C.playerTie);
+
+  drawPixelRect(px + 4, bY, w - 8, 14, C.playerSkin);
+
+  drawPixelRect(px + 2, bY - 4, w - 4, 8, C.playerHair);
+  drawPixelRect(px + 3, bY - 6, w - 6, 5, C.playerHair);
+  drawPixelRect(px + 1, bY - 2, 4, 6, C.playerHair);
+  drawPixelRect(px + w - 5, bY - 2, 4, 6, C.playerHair);
+  drawPixelRect(px + 5, bY - 5, 6, 3, '#e0c460');
+
+  const eyeY = bY + 7;
+  if (player.facing === 'left') {
+    drawPixelRect(px + 5, eyeY, 3, 3, '#4a2a0a');
+  } else if (player.facing === 'right') {
+    drawPixelRect(px + w - 8, eyeY, 3, 3, '#4a2a0a');
+  } else if (player.facing !== 'up') {
+    drawPixelRect(px + 7, eyeY, 3, 2, '#4a2a0a');
+    drawPixelRect(px + w - 10, eyeY, 3, 2, '#4a2a0a');
+    drawPixelRect(px + 8, eyeY + 4, 6, 1, '#c87a5a');
+  }
+
+  drawPixelRect(px, bY + 12, 3, 10 - sneakCrouch/2, C.playerShirt);
+  drawPixelRect(px + w - 3, bY + 12, 3, 10 - sneakCrouch/2, C.playerShirt);
+  drawPixelRect(px, bY + 21 - sneakCrouch/2, 3, 3, C.playerSkin);
+  drawPixelRect(px + w - 3, bY + 21 - sneakCrouch/2, 3, 3, C.playerSkin);
+
+  if (player.facing === 'down' || player.facing === 'left') {
+    drawPixelRect(px - 2, bY + 20 - sneakCrouch/2, 5, 5, '#fff');
+    drawPixelRect(px - 1, bY + 21 - sneakCrouch/2, 3, 3, '#eee');
+  }
+
+  if (player.sneaking) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px monospace';
+    ctx.fillText('shh', px + w/2 - 8, bY - 10);
+  }
+
+  ctx.fillStyle = 'rgba(255,215,0,0.7)';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('BRAYDEN', px + w/2, bY - 8);
+  ctx.textAlign = 'left';
+
+  if (game.isWorking) {
+    ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+    ctx.font = 'bold 10px monospace';
+    const dots = '.'.repeat((Math.floor(game.frameCount / 15) % 3) + 1);
+    ctx.fillText('Working' + dots, px - 8, bY - 14);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+// --- NPC RENDERING ---
+
+
+function drawNPC(npc) {
+  const x = npc.x, y = npc.y, w = T * 0.7, h = T * 0.9;
+  ctx.fillStyle = C.shadow;
+  ctx.beginPath();
+  ctx.ellipse(x + w/2, y + h, w/2, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const bob = Math.sin(game.frameCount * 0.05 + npc.x) * 1;
+
+  if (npc.sprite === 'kunal') {
+    const skinCol = '#b08860', hairCol = '#2a2a2a', hoodieCol = '#3a8a3a', hoodieDark = '#2a6a2a';
+    const trouserCol = '#3a3a3a', shoeCol = '#eee';
+
+    drawPixelRect(x + 3, y + h - 4, 8, 5, shoeCol);
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, shoeCol);
+    drawPixelRect(x + 4, y + h - 12, 7, 10, trouserCol);
+    drawPixelRect(x + w - 11, y + h - 12, 7, 10, trouserCol);
+    drawPixelRect(x + 1, y + 10 + bob, w - 2, h - 24, hoodieCol);
+    drawPixelRect(x + w/2 - 5, y + 20 + bob, 10, 5, hoodieDark);
+    drawPixelRect(x + w/2 - 3, y + 11 + bob, 2, 6, '#ddd');
+    drawPixelRect(x + w/2 + 1, y + 11 + bob, 2, 6, '#ddd');
+    drawPixelRect(x + 3, y + bob - 1, w - 6, 5, hoodieDark);
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 5, y + bob - 2, w - 10, 5, hairCol);
+    drawPixelRect(x + 8, y + 6 + bob, 3, 3, '#1a1a1a');
+    drawPixelRect(x + w - 11, y + 6 + bob, 3, 3, '#1a1a1a');
+    drawPixelRect(x + 10, y + 10 + bob, 5, 1, '#8a6040');
+
+  } else if (npc.sprite === 'lax') {
+    const skinCol = '#7a5a3a', hairCol = '#2a1a0a', hoodieCol = '#3a3a3a', hoodieDark = '#2a2a2a';
+    const jeanCol = '#8aaabb', shoeCol = '#eee', beardCol = '#2a1a0a';
+    const headphoneCol = '#555', headphonePad = '#444';
+
+    drawPixelRect(x + 3, y + h - 4, 8, 5, shoeCol);
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, shoeCol);
+    drawPixelRect(x + 4, y + h - 13, 7, 11, '#8aaabb');
+    drawPixelRect(x + w - 11, y + h - 13, 7, 11, '#8aaabb');
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 25, hoodieCol);
+    drawPixelRect(x + w/2 - 4, y + 10 + bob, 8, 4, '#ddd');
+    drawPixelRect(x + w/2 - 1, y + 13 + bob, 2, 12, '#555');
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 5, y + bob - 2, w - 10, 5, hairCol);
+    drawPixelRect(x + 6, y + bob - 3, w - 12, 3, hairCol);
+    drawPixelRect(x + 6, y + 10 + bob, w - 12, 4, beardCol);
+    drawPixelRect(x + 8, y + 6 + bob, 3, 2, '#111');
+    drawPixelRect(x + w - 11, y + 6 + bob, 3, 2, '#111');
+    drawPixelRect(x + 3, y + bob - 2, w - 6, 3, headphoneCol);
+    drawPixelRect(x + 2, y + bob + 1, 5, 8, headphonePad);
+    drawPixelRect(x + w - 7, y + bob + 1, 5, 8, headphonePad);
+    drawPixelRect(x + 3, y + bob + 2, 3, 6, '#333');
+    drawPixelRect(x + w - 6, y + bob + 2, 3, 6, '#333');
+
+  } else if (npc.sprite === 'andrew') {
+    const skinCol = '#d8c8b0', hairCol = '#6a5a3a', shirtCol = '#7a7a8a', trouserCol = '#4a4a4a';
+    drawPixelRect(x + 3, y + h - 4, 8, 5, '#3a2a1a');
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, '#3a2a1a');
+    drawPixelRect(x + 4, y + h - 13, 7, 11, trouserCol);
+    drawPixelRect(x + w - 11, y + h - 13, 7, 11, trouserCol);
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 25, shirtCol);
+    drawPixelRect(x + 4, y + h - 15, 5, 3, '#8a8a9a');
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 4, y + bob - 3, w - 8, 6, hairCol);
+    drawPixelRect(x + 3, y + bob - 1, 4, 4, hairCol);
+    drawPixelRect(x + w - 7, y + bob - 2, 4, 5, hairCol);
+    drawPixelRect(x + 7, y + 5 + bob, 4, 4, '#fff');
+    drawPixelRect(x + w - 11, y + 5 + bob, 4, 4, '#fff');
+    drawPixelRect(x + 8, y + 6 + bob, 2, 2, '#222');
+    drawPixelRect(x + w - 10, y + 6 + bob, 2, 2, '#222');
+    drawPixelRect(x + 7, y + 9 + bob, 4, 2, '#b0a090');
+    drawPixelRect(x + w - 11, y + 9 + bob, 4, 2, '#b0a090');
+    drawPixelRect(x + 10, y + 11 + bob, 5, 2, '#8a6a5a');
+    drawPixelRect(x - 3, y + 12 + bob, 6, 4, shirtCol);
+    drawPixelRect(x + w - 3, y + 12 + bob, 6, 4, shirtCol);
+    drawPixelRect(x - 5, y + 12 + bob, 3, 3, skinCol);
+    drawPixelRect(x + w + 1, y + 12 + bob, 3, 3, skinCol);
+
+  } else if (npc.sprite === 'boss') {
+    const skinCol = '#d4a88c', hairCol = '#1a1a1a', suitCol = '#2a2a3a', tieCol = '#cc3333';
+    drawPixelRect(x + 3, y + h - 4, 8, 5, '#2a2a1a');
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, '#2a2a1a');
+    drawPixelRect(x + 4, y + h - 13, 7, 11, '#3a3a4a');
+    drawPixelRect(x + w - 11, y + h - 13, 7, 11, '#3a3a4a');
+    drawPixelRect(x + 1, y + 10 + bob, w - 2, h - 24, suitCol);
+    drawPixelRect(x + w/2 - 2, y + 13 + bob, 4, 10, tieCol);
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 5, y + bob - 2, w - 10, 5, hairCol);
+    drawPixelRect(x + 6, y + bob - 3, w - 12, 3, hairCol);
+    drawPixelRect(x + 8, y + 6 + bob, 3, 3, '#111');
+    drawPixelRect(x + w - 11, y + 6 + bob, 3, 3, '#111');
+
+  } else if (npc.sprite === 'karen') {
+    const skinCol = '#d4a88c', hairCol = '#8a6a4a', blazerCol = '#6a6a7a', glassesCol = '#888';
+    drawPixelRect(x + 3, y + h - 4, 8, 5, '#4a3a2a');
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, '#4a3a2a');
+    drawPixelRect(x + 4, y + h - 13, 7, 11, '#5a5a6a');
+    drawPixelRect(x + w - 11, y + h - 13, 7, 11, '#5a5a6a');
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 25, blazerCol);
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 4, y + bob - 3, w - 8, 6, hairCol);
+    drawPixelRect(x + 3, y + bob - 1, 4, 4, hairCol);
+    drawPixelRect(x + w - 7, y + bob - 2, 4, 5, hairCol);
+    drawPixelRect(x + 6, y + 6 + bob, 3, 3, glassesCol);
+    drawPixelRect(x + w - 9, y + 6 + bob, 3, 3, glassesCol);
+    drawPixelRect(x + 9, y + 7 + bob, 2, 1, glassesCol);
+
+  } else if (npc.sprite === 'greg') {
+    const skinCol = '#d4a88c', shirtCol = '#4a8a4a', trouserCol = '#5a5a6a';
+    drawPixelRect(x + 3, y + h - 4, 8, 5, '#4a3a2a');
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, '#4a3a2a');
+    drawPixelRect(x + 4, y + h - 13, 7, 11, trouserCol);
+    drawPixelRect(x + w - 11, y + h - 13, 7, 11, trouserCol);
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 25, shirtCol);
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 4, y + bob - 3, w - 8, 6, '#8a7a6a');
+    drawPixelRect(x + 3, y + bob - 1, 4, 4, '#8a7a6a');
+    drawPixelRect(x + w - 7, y + bob - 2, 4, 5, '#8a7a6a');
+    drawPixelRect(x + 8, y + 6 + bob, 3, 3, '#111');
+    drawPixelRect(x + w - 11, y + 6 + bob, 3, 3, '#111');
+
+  } else if (npc.sprite === 'delivery') {
+    const skinCol = '#d4a88c', vestCol = '#cc9900', trouserCol = '#5a5a5a';
+    drawPixelRect(x + 3, y + h - 4, 8, 5, '#4a3a2a');
+    drawPixelRect(x + w - 11, y + h - 4, 8, 5, '#4a3a2a');
+    drawPixelRect(x + 4, y + h - 13, 7, 11, trouserCol);
+    drawPixelRect(x + w - 11, y + h - 13, 7, 11, trouserCol);
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 25, '#aaa');
+    drawPixelRect(x + 4, y + 12 + bob, w - 8, 8, vestCol);
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 4, y + bob - 3, w - 8, 6, '#8a7a6a');
+    drawPixelRect(x + 3, y + bob - 1, 4, 4, '#8a7a6a');
+    drawPixelRect(x + w - 7, y + bob - 2, 4, 5, '#8a7a6a');
+    drawPixelRect(x + 8, y + 6 + bob, 3, 3, '#111');
+    drawPixelRect(x + w - 11, y + 6 + bob, 3, 3, '#111');
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.font = 'bold 10px monospace';
+  const nameWidth = ctx.measureText(npc.name).width;
+  drawPixelRect(x + w/2 - nameWidth/2 - 3, y - 14, nameWidth + 6, 13, 'rgba(0,0,0,0.6)');
+  ctx.fillStyle = '#fff';
+  ctx.fillText(npc.name, x + w/2 - nameWidth/2, y - 4);
+
+  if (npc.sleeping) {
+    const zOff = Math.sin(game.frameCount * 0.06) * 3;
+    ctx.fillStyle = 'rgba(200, 200, 255, 0.8)';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('Z', x + w + 2, y - 6 + zOff);
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('z', x + w + 10, y - 14 + zOff * 0.7);
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('z', x + w + 16, y - 20 + zOff * 0.5);
+  }
+
+  if (npc.interactType === 'lax_lobby') {
+    drawPixelRect(x + w + 2, y + 14, 8, 6, '#c8a060');
+    drawPixelRect(x + w + 3, y + 15, 6, 2, '#4a8a2a');
+    drawPixelRect(x + w + 3, y + 17, 6, 2, '#dd6644');
+  }
+
+  // Speech bubble for Andrew - always visible
+  if (npc.sprite === 'andrew') {
+    const bubbleX = x + w + 4, bubbleY = y - 16;
+    drawPixelRect(bubbleX, bubbleY, 38, 18, '#fff');
+    drawPixelRect(bubbleX + 2, bubbleY + 2, 34, 14, '#fff');
+    drawPixelRect(bubbleX - 2, bubbleY + 12, 4, 4, '#fff');
+    drawPixelRect(bubbleX - 4, bubbleY + 14, 3, 3, '#fff');
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText('Pub?', bubbleX + 5, bubbleY + 13);
+  }
+
+  const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+  if (dist < T * 1.8 && !npc.sleeping) {
+    const pulse = Math.sin(game.frameCount * 0.1) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('[E] Talk', x - 4, y - 20);
+  }
+  if (dist < T * 1.8 && npc.sleeping) {
+    ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText('DANGER! Stay away!', x - 20, y - 22);
+  }
+}
+
+// --- ENEMY RENDERING ---
+
+
+function drawEnemy(enemy) {
+  if (enemy.dead) return;
+  const x = enemy.x, y = enemy.y, w = T * 0.7, h = T * 0.8;
+  ctx.strokeStyle = 'rgba(255, 50, 50, 0.1)';
+  ctx.beginPath();
+  ctx.arc(x + w/2, y + h/2, enemy.range, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (enemy.distracted) {
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+    ctx.font = '14px monospace';
+    ctx.fillText('?', x + w/2 - 3, y - 8);
+  }
+
+  if (enemy.hp < enemy.maxHp) {
+    const hpRatio = enemy.hp / enemy.maxHp;
+    drawPixelRect(x, y - 6, w, 4, '#333');
+    drawPixelRect(x + 1, y - 5, (w - 2) * hpRatio, 2, hpRatio > 0.5 ? '#4a4' : '#a44');
+  }
+
+  const bob = Math.sin(game.frameCount * 0.08 + enemy.x * 0.1) * 2;
+
+  if (enemy.type === 'zombie') {
+    const skinCol = '#d8c8b0', hairCol = '#6a5a3a', shirtCol = '#7a7a8a', trouserCol = '#4a4a4a';
+    drawPixelRect(x + 3, y + h - 4 + bob, 8, 5, '#3a2a1a');
+    drawPixelRect(x + w - 11, y + h - 4 + bob, 8, 5, '#3a2a1a');
+    drawPixelRect(x + 4, y + h - 13 + bob, 7, 11, trouserCol);
+    drawPixelRect(x + w - 11, y + h - 13 + bob, 7, 11, trouserCol);
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 25, shirtCol);
+    drawPixelRect(x + 4, y + h - 15 + bob, 5, 3, '#8a8a9a');
+    drawPixelRect(x + 5, y + bob, w - 10, 14, skinCol);
+    drawPixelRect(x + 4, y + bob - 3, w - 8, 6, hairCol);
+    drawPixelRect(x + 3, y + bob - 1, 4, 4, hairCol);
+    drawPixelRect(x + w - 7, y + bob - 2, 4, 5, hairCol);
+    drawPixelRect(x + 7, y + 5 + bob, 4, 4, '#fff');
+    drawPixelRect(x + w - 11, y + 5 + bob, 4, 4, '#fff');
+    drawPixelRect(x + 8, y + 6 + bob, 2, 2, '#222');
+    drawPixelRect(x + w - 10, y + 6 + bob, 2, 2, '#222');
+    drawPixelRect(x + 7, y + 9 + bob, 4, 2, '#b0a090');
+    drawPixelRect(x + w - 11, y + 9 + bob, 4, 2, '#b0a090');
+    drawPixelRect(x + 10, y + 11 + bob, 5, 2, '#8a6a5a');
+    drawPixelRect(x - 3, y + 12 + bob, 6, 4, shirtCol);
+    drawPixelRect(x + w - 3, y + 12 + bob, 6, 4, shirtCol);
+    drawPixelRect(x - 5, y + 12 + bob, 3, 3, skinCol);
+    drawPixelRect(x + w + 1, y + 12 + bob, 3, 3, skinCol);
+  } else {
+    let col = enemy.type === 'hr' ? '#6a2a6a' : enemy.type === 'chatty' ? '#3a6a3a' : '#3a3a6a';
+    drawPixelRect(x + 4, y + h - 10 + bob, 6, 10, '#3a3a4a');
+    drawPixelRect(x + w - 10, y + h - 10 + bob, 6, 10, '#3a3a4a');
+    drawPixelRect(x + 2, y + 10 + bob, w - 4, h - 22, col);
+    drawPixelRect(x + 4, y + bob, w - 8, 14, '#f0c8a0');
+    drawPixelRect(x + 4, y + bob, w - 8, 5, '#5a3a1a');
+    drawPixelRect(x + 7, y + 6 + bob, 3, 3, '#222');
+    drawPixelRect(x + w - 10, y + 6 + bob, 3, 3, '#222');
+  }
+
+  ctx.fillStyle = 'rgba(180, 40, 40, 0.8)';
+  ctx.font = 'bold 9px monospace';
+  const nw = ctx.measureText(enemy.name).width;
+  ctx.fillText(enemy.name, x + w/2 - nw/2, y - 8);
+}
+
+
+
+function drawItem(item) {
+  if (item.collected) return;
+  const x = item.x, y = item.y;
+  const floatY = Math.sin(game.frameCount * 0.06 + item.x) * 3;
+  const glowAlpha = Math.sin(game.frameCount * 0.08) * 0.2 + 0.3;
+  ctx.fillStyle = `rgba(255, 215, 0, ${glowAlpha})`;
+  ctx.beginPath();
+  ctx.arc(x + 12, y + 12 + floatY, 16, 0, Math.PI * 2);
+  ctx.fill();
+  const ix = x + 2, iy = y + 2 + floatY;
+
+  if (item.type === 'headphones') {
+    drawPixelRect(ix + 2, iy + 4, 16, 3, '#333');
+    drawPixelRect(ix + 2, iy + 4, 4, 12, '#444');
+    drawPixelRect(ix + 14, iy + 4, 4, 12, '#444');
+  } else if (item.type === 'coffee') {
+    drawPixelRect(ix + 4, iy + 2, 12, 16, '#8a5a2a');
+    drawPixelRect(ix + 6, iy + 4, 8, 6, '#4a2a0a');
+  }
+
+  const dist = Math.hypot(player.x - item.x, player.y - item.y);
+  if (dist < T * 1.5) {
+    const pulse = Math.sin(game.frameCount * 0.1) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText('[E] ' + item.name, x - 10, y - 8 + floatY);
+  }
+}
+
+// --- SALT PROJECTILE RENDERING ---
+function drawSaltProjectiles() {
+  for (const p of game.saltProjectiles) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(p.x - p.dx * 3, p.y - p.dy * 3, 4, 4);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(p.x, p.y, 5, 5);
+    ctx.fillStyle = '#ddd';
+    ctx.fillRect(p.x + 1, p.y + 1, 3, 3);
+  }
+}
+
+
+
+function drawUI() {
+  drawPixelRect(0, 0, canvas.width, 52, C.uiBg);
+
+  ctx.fillStyle = '#aaa';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(rooms[game.currentRoom].name, 8, 13);
+
+  const timeMin = Math.floor(game.time / 60);
+  const timeSec = Math.floor(game.time % 60);
+  const timeColor = game.time < 60 ? '#ff4444' : game.time < 120 ? '#ffaa44' : '#ffdd44';
+  ctx.fillStyle = timeColor;
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText(`TIME ${timeMin}:${timeSec.toString().padStart(2, '0')}`, canvas.width - 110, 13);
+  const timeRatio = game.time / game.maxTime;
+  drawPixelRect(canvas.width - 112, 17, 104, 6, '#333');
+  drawPixelRect(canvas.width - 110, 18, 100 * timeRatio, 4, timeColor);
+
+  ctx.fillStyle = '#aaa'; ctx.font = '9px monospace';
+  ctx.fillText('SNEAK', 8, 28);
+  const stamRatio = player.stamina / player.maxStamina;
+  drawPixelRect(48, 21, 82, 8, '#333');
+  drawPixelRect(49, 22, 80 * stamRatio, 6, stamRatio > 0.3 ? C.stamina : C.staminaLow);
+
+  const workRatio = game.workMeter / game.maxWork;
+  const workColor = workRatio >= (game.workThreshold / game.maxWork) ? '#4a9a4a' : C.workMeter;
+  ctx.fillStyle = '#aaa';
+  ctx.fillText('WORK', 140, 28);
+  drawPixelRect(174, 21, 82, 8, '#333');
+  drawPixelRect(175, 22, 80 * workRatio, 6, workColor);
+  const threshX = 175 + 80 * (game.workThreshold / game.maxWork);
+  drawPixelRect(threshX - 1, 19, 2, 12, '#ffd700');
+
+  if (game.currentRoom === 'office') {
+    ctx.fillStyle = game.officeDoorUnlocked ? '#4a4' : '#a66';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(game.officeDoorUnlocked ? 'DOOR OPEN' : 'DOOR LOCKED', 140, 13);
+  }
+
+  const toiletRatio = game.toiletMeter / game.maxToilet;
+  const toiletColor = toiletRatio > 0.7 ? C.toiletMeterHigh : C.toiletMeter;
+  ctx.fillStyle = '#aaa';
+  ctx.fillText('TOILET', 266, 28);
+  drawPixelRect(306, 21, 82, 8, '#333');
+  drawPixelRect(307, 22, 80 * toiletRatio, 6, toiletColor);
+  if (toiletRatio > 0.8 && game.frameCount % 30 < 15) {
+    ctx.fillStyle = '#ff4444';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('URGENT!!', 266, 13);
+  }
+
+  if (game.saltAmmo > 0) {
+    ctx.fillStyle = '#eee';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(`SALT: ${game.saltAmmo}/${game.saltMax} [SPACE]`, 8, 42);
+  }
+
+  drawPixelRect(canvas.width / 2 - 60, canvas.height - 44, 120, 40, C.uiBg);
+  ctx.strokeStyle = C.uiBorder;
+  ctx.strokeRect(canvas.width / 2 - 60, canvas.height - 44, 120, 40);
+  for (let i = 0; i < 2; i++) {
+    const slotX = canvas.width / 2 - 54 + i * 58, slotY = canvas.height - 40;
+    drawPixelRect(slotX, slotY, 50, 32, '#2a2a2a');
+    ctx.strokeStyle = '#555';
+    ctx.strokeRect(slotX, slotY, 50, 32);
+    ctx.fillStyle = '#666'; ctx.font = '9px monospace';
+    ctx.fillText(`[${i + 1}]`, slotX + 2, slotY + 10);
+    if (player.inventory[i]) {
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px monospace';
+      const sn = player.inventory[i].name;
+      ctx.fillText(sn.length > 8 ? sn.substring(0, 7) + '.' : sn, slotX + 2, slotY + 24);
+    }
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '9px monospace';
+  ctx.fillText('WASD:Move  SHIFT:Sneak  E:Interact  1/2:Use Item  SPACE:Salt', 8, canvas.height - 6);
+
+  // Free roam quest tracker
+  if (game.mode === 'freeroam') {
+    // Gold display
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 11px monospace';
+    ctx.fillText('Work Points: ' + game.gold, canvas.width - 150, 20);
+
+    // Active quest
+    if (game.activeQuest && !game.activeQuest.completed) {
+      const q = game.activeQuest;
+      drawPixelRect(canvas.width - 220, 30, 210, 40, 'rgba(0,0,0,0.7)');
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px monospace';
+      ctx.fillText('QUEST: ' + q.name, canvas.width - 214, 44);
+      ctx.fillStyle = '#ccc'; ctx.font = '9px monospace';
+      ctx.fillText('Find: ' + q.itemNeeded.replace(/_/g, ' '), canvas.width - 214, 58);
+    }
+
+    // Quest completion count
+    const done = game.quests.filter(q => q.completed).length;
+    ctx.fillStyle = '#aaa'; ctx.font = '9px monospace';
+    ctx.fillText('Quests: ' + done + '/' + game.quests.length, canvas.width - 150, canvas.height - 10);
+  }
+}
+
+// --- FRIDGE MENU ---
+function drawFridgeMenu() {
+  drawPixelRect(canvas.width/2 - 150, 100, 300, 300, 'rgba(0,0,0,0.92)');
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(canvas.width/2 - 150, 100, 300, 300);
+  ctx.lineWidth = 1;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.fridgeLight;
+  ctx.font = 'bold 18px monospace';
+  ctx.fillText('FRIDGE', canvas.width/2, 130);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '11px monospace';
+  ctx.fillText('W/S to browse, E to take, ESC to close', canvas.width/2, 150);
+
+  const items = game.fridgeItems;
+  for (let i = 0; i < items.length; i++) {
+    const info = FRIDGE_ITEM_INFO[items[i]];
+    const yPos = 180 + i * 60;
+    const selected = i === game.fridgeMenuIndex;
+
+    if (selected) {
+      drawPixelRect(canvas.width/2 - 130, yPos - 10, 260, 50, 'rgba(255,215,0,0.15)');
+      ctx.strokeStyle = '#ffd700';
+      ctx.strokeRect(canvas.width/2 - 130, yPos - 10, 260, 50);
+    }
+
+    ctx.fillStyle = selected ? '#ffd700' : '#aaa';
+    ctx.font = selected ? 'bold 14px monospace' : '13px monospace';
+    ctx.fillText(info.name, canvas.width/2, yPos + 8);
+
+    ctx.fillStyle = selected ? '#ccc' : '#666';
+    ctx.font = '10px monospace';
+    ctx.fillText(info.desc, canvas.width/2, yPos + 24);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+// --- NPC MENU RENDERING ---
+function drawNpcMenu() {
+  const menuW = 320, menuH = 60 + game.npcMenuOptions.length * 55;
+  const menuX = canvas.width/2 - menuW/2, menuY = canvas.height/2 - menuH/2;
+
+  drawPixelRect(menuX, menuY, menuW, menuH, 'rgba(0,0,0,0.92)');
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(menuX, menuY, menuW, menuH);
+  ctx.lineWidth = 1;
+
+  ctx.textAlign = 'center';
+  const npcName = game.npcMenuTarget ? game.npcMenuTarget.name : 'NPC';
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 16px monospace';
+  ctx.fillText(npcName, canvas.width/2, menuY + 25);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '10px monospace';
+  ctx.fillText('W/S to browse, E to select, ESC to close', canvas.width/2, menuY + 42);
+
+  for (let i = 0; i < game.npcMenuOptions.length; i++) {
+    const opt = game.npcMenuOptions[i];
+    const yPos = menuY + 55 + i * 55;
+    const selected = i === game.npcMenuIndex;
+
+    if (selected) {
+      drawPixelRect(menuX + 10, yPos - 5, menuW - 20, 48, 'rgba(255,215,0,0.15)');
+      ctx.strokeStyle = '#ffd700';
+      ctx.strokeRect(menuX + 10, yPos - 5, menuW - 20, 48);
+    }
+
+    ctx.fillStyle = selected ? '#ffd700' : '#aaa';
+    ctx.font = selected ? 'bold 14px monospace' : '13px monospace';
+    ctx.fillText(opt.label, canvas.width/2, yPos + 14);
+
+    ctx.fillStyle = selected ? '#ccc' : '#666';
+    ctx.font = '10px monospace';
+    ctx.fillText(opt.desc, canvas.width/2, yPos + 30);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+// --- VENDOR MENU ---
+function drawVendorMenu() {
+  const mx = 100, my = 80, mw = canvas.width - 200, mh = 380;
+  drawPixelRect(mx, my, mw, mh, 'rgba(0, 0, 0, 0.92)');
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2;
+  ctx.strokeRect(mx, my, mw, mh);
+  ctx.lineWidth = 1;
+
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText("KUNAL'S SHOP", canvas.width / 2, my + 24);
+  ctx.fillStyle = '#aaa'; ctx.font = '11px monospace';
+  ctx.fillText('Work Points: ' + game.gold, canvas.width / 2, my + 42);
+  ctx.textAlign = 'left';
+
+  const items = game.vendorItems;
+  for (let i = 0; i < items.length; i++) {
+    const iy = my + 60 + i * 44;
+    const selected = i === game.vendorMenuIndex;
+    if (selected) {
+      drawPixelRect(mx + 10, iy - 4, mw - 20, 40, 'rgba(255, 215, 0, 0.12)');
+      ctx.strokeStyle = '#ffd700';
+      ctx.strokeRect(mx + 10, iy - 4, mw - 20, 40);
+    }
+    const canAfford = game.gold >= items[i].cost;
+    ctx.fillStyle = selected ? '#fff' : '#aaa'; ctx.font = 'bold 13px monospace';
+    ctx.fillText((selected ? '> ' : '  ') + items[i].name, mx + 20, iy + 12);
+    ctx.fillStyle = canAfford ? '#4a9a4a' : '#aa4444'; ctx.font = '11px monospace';
+    ctx.fillText('Cost: ' + items[i].cost + ' pts', mx + 240, iy + 12);
+    ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+    ctx.fillText(items[i].desc, mx + 20, iy + 28);
+  }
+
+  ctx.fillStyle = '#666'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('[W/S] Browse  |  [E/Enter] Buy  |  [ESC] Close', canvas.width / 2, my + mh - 12);
+  ctx.textAlign = 'left';
+}
+
+// --- DIALOGUE ---
+function drawDialogue() {
+  if (!game.currentDialogue) return;
+  const boxH = 100, boxY = canvas.height - boxH - 50;
+  drawPixelRect(20, boxY, canvas.width - 40, boxH, 'rgba(0,0,0,0.9)');
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 2;
+  ctx.strokeRect(20, boxY, canvas.width - 40, boxH);
+  ctx.lineWidth = 1;
+
+  ctx.fillStyle = '#eee'; ctx.font = '13px monospace';
+  const maxWidth = canvas.width - 80;
+  const words = game.currentDialogue.split(' ');
+  let line = '', lineY = boxY + 25;
+  for (const word of words) {
+    const testLine = line + word + ' ';
+    if (ctx.measureText(testLine).width > maxWidth) {
+      ctx.fillText(line, 40, lineY); line = word + ' '; lineY += 18;
+    } else line = testLine;
+  }
+  ctx.fillText(line, 40, lineY);
+
+  if (game.frameCount % 40 < 25) {
+    ctx.fillStyle = '#aaa'; ctx.font = '10px monospace';
+    ctx.fillText('Press [E] or [SPACE] to continue...', 40, boxY + boxH - 12);
+  }
+}
+
+
+
+function startGame() {
+  game.state = 'playing';
+  game.currentRoom = 'office';
+  game.time = game.maxTime;
+  game.workMeter = 0;
+  game.toiletMeter = 0;
+  game.officeDoorUnlocked = false;
+  game.isWorking = false;
+  game.saltAmmo = 0;
+  game.saltProjectiles = [];
+  game.fridgeItems = ['salt', 'beer', 'energy_drink'];
+  game.fridgeMenuIndex = 0;
+  game.energyDrinkWorkTimer = 0;
+  game.energyDrinkToiletTimer = 0;
+  game.npcMenuOptions = [];
+  game.npcMenuIndex = 0;
+  game.npcMenuTarget = null;
+
+  const start = rooms.office.playerStart;
+  player.x = start.x; player.y = start.y;
+  player.stamina = player.maxStamina;
+  player.inventory = game.level === 3 ? [null, null, null, null] : [null, null];
+  player._coffeeBoost = 0;
+  player._headphoneTimer = 0;
+  player.isHiding = false;
+  player.imodiumTimer = 0;
+
+  game.paperBalls = [];
+  game.randomEventTimer = 30;
+  game.currentEvent = null;
+  game.emailNotifications = [];
+  game.emailTimer = 20;
+  game.deliveryDriverMoved = false;
+  game.occupiedCubicle = -1;
+  game.speechBubbles = [];
+  game.quipTimer = 0;
+
+  for (const roomKey in rooms) {
+    const r = rooms[roomKey];
+    if (r.items) r.items.forEach(i => i.collected = false);
+    if (r.enemies) r.enemies.forEach(e => {
+      e.patrolIndex = 0; e.alerted = false;
+      e.distracted = false; e.distractTimer = 0;
+      e.hp = e.maxHp; e.dead = false;
+      if (e.startX !== undefined) { e.x = e.startX; e.y = e.startY; }
+    });
+    if (r.npcs) r.npcs.forEach(n => {
+      if (n.originX !== undefined) {
+        n.x = n.originX; n.y = n.originY;
+      }
+      if (n.roaming) { n.roamTarget = null; n.roamTimer = 0; }
+      if (n.chasePlayer !== undefined) n.chasePlayer = true;
+      if (n.sleeping !== undefined) n.sleeping = true;
+      if (n.interacted !== undefined) n.interacted = false;
+      if (n.storyActive !== undefined) n.storyActive = false;
+      if (n.catchCooldown !== undefined) n.catchCooldown = 0;
+    });
+  }
+  if (rooms.lobby.npcs) {
+    rooms.lobby.npcs.forEach(n => {
+      if (n.interactType === 'kunal_lobby') n.sleeping = true;
+      if (n.interactType === 'lax_lobby') n.chasePlayer = true;
+    });
+  }
+
+  // Configure door routing based on level
+  if (game.level === 1) {
+    // Level 1: Office → Lobby → Toilet Area (3 rooms)
+    // Lobby top door goes straight to toiletArea
+    rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletArea', toX: 7, toY: 9, label: 'To the Toilets!' };
+    // toiletArea back door goes to lobby
+    rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'lobby', toX: 13, toY: 1, label: 'Back to Communal Area' };
+  } else if (game.level === 2) {
+    // Level 2: Office → Lobby → Toilet Hall → Stairwell → Toilet Area (5 rooms)
+    rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletHall', toX: 7, toY: 10, label: 'Toilet Hallway' };
+    rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Back to Stairwell' };
+  } else if (game.level === 3) {
+    game.mode = 'freeroam';
+    game.time = 9999; // no time pressure
+    game.toiletRiseRate = 0; // no toilet urgency
+    game.maxTime = 9999;
+    game.officeDoorUnlocked = true; // doors always open
+    game.gold = 0;
+
+    // Set up door routing - lobby connects to pub via exit
+    rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletHall', toX: 7, toY: 10, label: 'Toilet Hallway' };
+    rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Back to Stairwell' };
+
+    // toiletHall exit door leads to pub instead of game over
+    rooms.toiletHall.doors[2] = { x: 12, y: 10, toRoom: 'pub', toX: 7, toY: 9, label: 'Go to the Pub' };
+
+    // Remove sleeping behavior from all Kunals - he's a vendor in free roam
+    for (const roomKey in rooms) {
+      const r = rooms[roomKey];
+      if (r.npcs) r.npcs.forEach(n => {
+        if (n.sleeping) n.sleeping = false;
+      });
+    }
+
+    // Set up quests
+    game.quests = [
+      { id: 'coffee_run', name: "Karin's Coffee Run", description: 'Find Coffee and bring it to Karin', itemNeeded: 'coffee', giver: 'Karin', completed: false, reward: 20, rewardDesc: '+20 Work Points' },
+      { id: 'lost_headphones', name: "Rebecca's Headphones", description: 'Find Headphones and return them to Rebecca', itemNeeded: 'headphones', giver: 'Rebecca', completed: false, reward: 25, rewardDesc: '+25 Work Points' },
+      { id: 'pub_snacks', name: "Karin's Pub Snacks", description: 'Get Pub Snacks from the pub for Karin', itemNeeded: 'pub_snacks', giver: 'Karin', completed: false, reward: 30, rewardDesc: '+30 Work Points' },
+      { id: 'beer_mat', name: "Rebecca's Collection", description: 'Find the rare Beer Mat in the pub', itemNeeded: 'beer_mat', giver: 'Rebecca', completed: false, reward: 20, rewardDesc: '+20 Work Points' },
+      { id: 'imodium_quest', name: "Karin's Emergency", description: 'Find Imodium for Karin (she ate the curry too)', itemNeeded: 'imodium', giver: 'Karin', completed: false, reward: 35, rewardDesc: '+35 Work Points' },
+      { id: 'dart_quest', name: "Rebecca's Darts Night", description: 'Get a Dart from the pub for tonight', itemNeeded: 'dart', giver: 'Rebecca', completed: false, reward: 15, rewardDesc: '+15 Work Points' },
+    ];
+    game.activeQuest = null;
+
+    // Add Karin and Rebecca NPCs to office
+    rooms.office.npcs.push(
+      { x: 1 * T, y: 3 * T, name: 'Karin', type: 'coworker', interactType: 'karin_quest',
+        roaming: false, originX: 1 * T, originY: 3 * T, sprite: 'karin',
+        dialogue: ["Karin: Hey Brayden! I've got some tasks for you if you're bored..."] },
+      { x: 1 * T, y: 7 * T, name: 'Rebecca', type: 'coworker', interactType: 'rebecca_quest',
+        roaming: false, originX: 1 * T, originY: 7 * T, sprite: 'rebecca',
+        dialogue: ["Rebecca: Oh Brayden, perfect timing! I need a favour..."] }
+    );
+
+    // Change office Kunal to vendor
+    rooms.office.npcs.forEach(n => {
+      if (n.name === 'Kunal') {
+        n.interactType = 'kunal_vendor';
+        n.dialogue = ["Kunal: Yo! Want to buy something? I accept work progress as payment."];
+      }
+    });
+
+    // Add more items scattered around rooms for free roam
+    rooms.lobby.items.push(
+      { x: 7 * T, y: 2 * T, name: 'Biscuits', type: 'pickup', itemType: 'biscuits', collected: false },
+      { x: 14 * T, y: 8 * T, name: 'Stapler', type: 'pickup', itemType: 'stapler', collected: false }
+    );
+    rooms.toiletHall.items.push(
+      { x: 8 * T, y: 8 * T, name: 'Toilet Roll', type: 'pickup', itemType: 'toilet_roll', collected: false }
+    );
+  }
+}
+
+function resetGame() { game.state = 'title'; game.levelSelectIndex = game.level - 1; }
+
+function isNearComputer() {
+  if (game.currentRoom !== 'office') return false;
+  const room = rooms.office;
+  const pgx = Math.floor((player.x + player.w / 2) / T);
+  const pgy = Math.floor((player.y + player.h / 2) / T);
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      const tx = pgx + ox, ty = pgy + oy;
+      if (ty >= 0 && ty < ROWS && tx >= 0 && tx < COLS) {
+        if (room.grid[ty][tx] === TILE_MONITOR) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isNearFridge() {
+  if (game.currentRoom !== 'office') return false;
+  const fridgeX = 1 * T + T/2, fridgeY = 6 * T + T/2;
+  return Math.hypot(player.x + player.w/2 - fridgeX, player.y + player.h/2 - fridgeY) < T * 1.8;
+}
+
+function getNearestDesk() {
+  const room = rooms[game.currentRoom];
+  let nearest = null, minDist = Infinity;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (room.grid[y][x] === TILE_DESK || room.grid[y][x] === TILE_COPIER) {
+        const dx = player.x + player.w/2 - (x * T + T/2);
+        const dy = player.y + player.h/2 - (y * T + T/2);
+        const dist = Math.hypot(dx, dy);
+        if (dist < T * 1.8 && dist < minDist) { nearest = {x: x*T, y: y*T}; minDist = dist; }
+      }
+    }
+  }
+  return nearest;
+}
+
+function toggleHiding() {
+  if (player.isHiding) {
+    player.isHiding = false;
+    return;
+  }
+  const desk = getNearestDesk();
+  if (desk) {
+    player.isHiding = true;
+    player.x = desk.x + T/2 - player.w/2;
+    player.y = desk.y + T/2 - player.h/2;
+  }
+}
+
+function throwPaperBall() {
+  const dirs = { up: {dx:0,dy:-1}, down: {dx:0,dy:1}, left: {dx:-1,dy:0}, right: {dx:1,dy:0} };
+  const d = dirs[player.facing] || dirs.down;
+  game.paperBalls.push({
+    x: player.x + player.w/2, y: player.y + player.h/2,
+    dx: d.dx * 4, dy: d.dy * 4, timer: 1.5, landed: false,
+    landX: 0, landY: 0, distractTimer: 4
+  });
+}
+
+function updatePaperBalls(dt) {
+  const room = rooms[game.currentRoom];
+  for (let i = game.paperBalls.length - 1; i >= 0; i--) {
+    const pb = game.paperBalls[i];
+    if (!pb.landed) {
+      pb.x += pb.dx; pb.y += pb.dy;
+      pb.timer -= dt;
+      // Check wall collision
+      const tx = Math.floor(pb.x / T), ty = Math.floor(pb.y / T);
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS || isSolid(room.grid[ty]?.[tx])) {
+        pb.landed = true; pb.landX = pb.x; pb.landY = pb.y;
+      }
+      if (pb.timer <= 0) { pb.landed = true; pb.landX = pb.x; pb.landY = pb.y; }
+    } else {
+      pb.distractTimer -= dt;
+      // Distract nearby enemies
+      if (room.enemies) {
+        for (const e of room.enemies) {
+          if (e.dead) continue;
+          const dist = Math.hypot(e.x - pb.landX, e.y - pb.landY);
+          if (dist < T * 5) {
+            e.distracted = true; e.distractTimer = Math.max(e.distractTimer, pb.distractTimer);
+            e.distractX = pb.landX; e.distractY = pb.landY;
+          }
+        }
+      }
+      if (pb.distractTimer <= 0) game.paperBalls.splice(i, 1);
+    }
+  }
+}
+
+function drawPaperBalls() {
+  for (const pb of game.paperBalls) {
+    ctx.fillStyle = '#d4c8a0';
+    ctx.beginPath();
+    const px = pb.landed ? pb.landX : pb.x;
+    const py = pb.landed ? pb.landY : pb.y;
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    if (pb.landed) {
+      // Noise rings
+      const alpha = pb.distractTimer / 4;
+      ctx.strokeStyle = `rgba(255, 200, 100, ${alpha * 0.4})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(px, py, (4 - pb.distractTimer) * 15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+function updatePlayer(dt) {
+  if (game.state !== 'playing') return;
+
+  if (keys['e'] && isNearComputer() && !game.officeDoorUnlocked) {
+    game.isWorking = true;
+    const workRate = game.energyDrinkWorkTimer > 0 ? game.workFillRate * 3 : game.workFillRate;
+    game.workMeter = Math.min(game.maxWork, game.workMeter + workRate * dt);
+    // Rotate funny work task descriptions
+    game.workTaskTimer -= dt;
+    if (game.workTaskTimer <= 0 || !game.workTask) {
+      game.workTaskTimer = 1.8 + Math.random() * 2;
+      const tasks = [
+        'Updating spreadsheet nobody reads...',
+        'Replying all to a chain of 47 emails...',
+        'Renaming final_v2_FINAL_actual.docx...',
+        'Attending meeting that could\'ve been an email...',
+        'Filling in timesheet... creatively...',
+        'Writing passive-aggressive Slack message...',
+        'Pretending to understand the Jira board...',
+        'Moving tickets to "In Progress"...',
+        'Googling error message on Stack Overflow...',
+        'Nodding along in standup...',
+        'Copy-pasting from ChatGPT...',
+        'Making the logo bigger...',
+        'Clearing 200 unread notifications...',
+        'Submitting expense report from 6 months ago...',
+        'Restarting computer for the 3rd time...',
+        'Watching progress bar... watching you...',
+        'Doing "synergy" on the "deliverables"...',
+        'Aligning boxes in PowerPoint...',
+        'Pretending VPN works...',
+        'Deleting emails without reading them...',
+        'Writing unit tests... LOL just kidding...',
+        'Calculating how long until lunch...',
+        'Staring at code you wrote last Friday...',
+        'Wondering who approved this codebase...',
+      ];
+      game.workTask = tasks[Math.floor(Math.random() * tasks.length)];
+    }
+    if (game.workMeter >= game.workThreshold && !game.officeDoorUnlocked) {
+      game.officeDoorUnlocked = true;
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "You've done enough work! The office door is now UNLOCKED. Time to make your escape to the toilet...";
+    }
+    player.walking = false;
+    return;
+  }
+  game.isWorking = false;
+
+  if (player.isHiding) {
+    player.walking = false;
+    return;
+  }
+
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup']) { dy = -1; player.facing = 'up'; }
+  if (keys['s'] || keys['arrowdown']) { dy = 1; player.facing = 'down'; }
+  if (keys['a'] || keys['arrowleft']) { dx = -1; player.facing = 'left'; }
+  if (keys['d'] || keys['arrowright']) { dx = 1; player.facing = 'right'; }
+  if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+
+  player.walking = dx !== 0 || dy !== 0;
+  player.sneaking = keys['shift'] && player.stamina > 0;
+  if (player.sneaking && player.walking) {
+    player.stamina = Math.max(0, player.stamina - player.staminaDrain * dt);
+  } else if (!player.sneaking) {
+    player.stamina = Math.min(player.maxStamina, player.stamina + player.staminaRegen * dt);
+  }
+
+  const speed = player.sneaking ? player.sneakSpeed : player.speed;
+  const actualSpeed = player._coffeeBoost > 0 ? speed * 1.8 : speed;
+  const nx = player.x + dx * actualSpeed * SCALE;
+  const ny = player.y + dy * actualSpeed * SCALE;
+  if (canMoveTo(nx, player.y, player.w, player.h)) player.x = nx;
+  if (canMoveTo(player.x, ny, player.w, player.h)) player.y = ny;
+  player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+  player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+
+  if (player._coffeeBoost > 0) player._coffeeBoost -= dt;
+  if (player._headphoneTimer > 0) player._headphoneTimer -= dt;
+
+  player.canInteract = null;
+  const room = rooms[game.currentRoom];
+
+  if (isNearFridge() && game.fridgeItems.length > 0) {
+    player.canInteract = { type: 'fridge' };
+  }
+
+  if (isNearComputer() && !game.officeDoorUnlocked) {
+    player.canInteract = { type: 'computer' };
+  }
+
+  for (const door of room.doors) {
+    const doorX = door.x * T + T / 2, doorY = door.y * T + T / 2;
+    const dist = Math.hypot(player.x + player.w / 2 - doorX, player.y + player.h / 2 - doorY);
+    if (dist < T * 1.5) {
+      if (door.locked && !game.officeDoorUnlocked) {
+        player.canInteract = { type: 'lockedDoor', data: door };
+      } else {
+        player.canInteract = { type: 'door', data: door };
+      }
+    }
+  }
+
+  if (room.npcs) {
+    for (const npc of room.npcs) {
+      const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+      if (dist < T * 1.8) player.canInteract = { type: 'npc', data: npc };
+    }
+  }
+
+  if (room.items) {
+    for (const item of room.items) {
+      if (item.collected) continue;
+      const dist = Math.hypot(player.x - item.x, player.y - item.y);
+      if (dist < T * 1.5) player.canInteract = { type: 'item', data: item };
+    }
+  }
+
+  if (room.winTiles) {
+    for (const wt of room.winTiles) {
+      const wtx = wt.x * T, wty = wt.y * T;
+      if (Math.hypot(player.x + player.w/2 - wtx - T/2, player.y + player.h/2 - wty - T/2) < T) {
+        game.state = 'win';
+        return;
+      }
+    }
+  }
+}
+
+function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
+  const dx = targetX - enemy.x, dy = targetY - enemy.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 2) {
+    const speed = Math.min(maxSpeed, dist);
+    enemy.x += (dx / dist) * speed;
+    enemy.y += (dy / dist) * speed;
+    // Try sliding along walls
+    if (!canMoveTo(enemy.x, enemy.y, T * 0.7, T * 0.8)) {
+      enemy.x -= (dx / dist) * speed;
+      if (canMoveTo(enemy.x, enemy.y + (dy / dist) * speed, T * 0.7, T * 0.8)) {
+        enemy.y += (dy / dist) * speed;
+      } else {
+        enemy.y -= (dy / dist) * speed;
+        if (canMoveTo(enemy.x + (dx / dist) * speed, enemy.y, T * 0.7, T * 0.8)) {
+          enemy.x += (dx / dist) * speed;
+        }
+      }
+    }
+  }
+}
+
+function updateEnemies(dt) {
+  const room = rooms[game.currentRoom];
+  if (!room.enemies) return;
+
+  if (game.currentEvent?.type === 'fireDrill') {
+    for (const enemy of room.enemies) {
+      if (!enemy.dead) enemy.alerted = false;
+    }
+    return;
+  }
+
+  for (const enemy of room.enemies) {
+    if (enemy.dead) continue;
+    if (enemy.distracted) {
+      enemy.distractTimer -= dt;
+      if (enemy.distractTimer <= 0) enemy.distracted = false;
+      // Move toward distraction
+      if (enemy.distractX !== undefined && enemy.distractY !== undefined) {
+        const dist = Math.hypot(enemy.distractX - enemy.x, enemy.distractY - enemy.y);
+        if (dist > 4) {
+          const speed = enemy.speed * SCALE * 0.3;
+          moveEnemyTowardTarget(enemy, enemy.distractX, enemy.distractY, speed);
+        }
+      }
+      continue;
+    }
+
+    if (enemy.type === 'zombie') {
+      const playerDist = Math.hypot(
+        player.x + player.w / 2 - enemy.x - T * 0.35,
+        player.y + player.h / 2 - enemy.y - T * 0.4
+      );
+
+      if (game.isWorking) {
+        continue;
+      }
+
+      const isInteracting = game.state === 'interact' || game.state === 'npcMenu' || game.state === 'fridgeMenu';
+      if (isInteracting) {
+        const cdx = player.x - enemy.x, cdy = player.y - enemy.y;
+        const cdist = Math.hypot(cdx, cdy);
+        if (cdist > 0 && cdist < T * 8) {
+          const retreatSpeed = enemy.speed * SCALE * 0.2;
+          moveEnemyTowardTarget(enemy, enemy.x - (cdx / cdist) * T * 4, enemy.y - (cdy / cdist) * T * 4, retreatSpeed);
+        }
+        continue;
+      }
+
+      // Check if player is hiding and invisible via headphones
+      if (player.isHiding && player._headphoneTimer > 0) {
+        // Enemy can't detect hiding player, roam randomly instead
+        if (!enemy.roamTarget || Math.hypot(enemy.x - enemy.roamTarget.x, enemy.y - enemy.roamTarget.y) < 4) {
+          enemy.roamTarget = {
+            x: Math.random() * (14 * T - 4 * T) + 4 * T,
+            y: Math.random() * (10 * T - 3 * T) + 3 * T
+          };
+        }
+        const dist = Math.hypot(enemy.roamTarget.x - enemy.x, enemy.roamTarget.y - enemy.y);
+        if (dist > 4) {
+          const speed = enemy.speed * SCALE * 0.3;
+          moveEnemyTowardTarget(enemy, enemy.roamTarget.x, enemy.roamTarget.y, speed);
+        }
+        continue;
+      }
+
+      const cdx = player.x - enemy.x, cdy = player.y - enemy.y;
+      const cdist = Math.hypot(cdx, cdy);
+      if (cdist > 0) {
+        const zombieSpeed = enemy.speed * SCALE * 0.3;
+        moveEnemyTowardTarget(enemy, player.x, player.y, zombieSpeed);
+      }
+
+      if (playerDist < T * 0.7) {
+        if (game.mode === 'freeroam') {
+          game.currentRoom = 'pub';
+          player.x = 7 * T; player.y = 9 * T;
+          game.state = 'interact';
+          game.dialogueQueue = ["Andrew dragged you to the pub! 'Just one pint!'", "*You're now at the pub. Find the door to get back!*"];
+          game.currentDialogue = game.dialogueQueue.shift();
+        } else {
+          game.state = 'pub';
+          game.gameOverReason = enemy.caught;
+        }
+      }
+      continue;
+    }
+
+    if (!enemy.patrolIndex) enemy.patrolIndex = 0;
+    const target = enemy.patrol[enemy.patrolIndex];
+    const edx = target.x - enemy.x, edy = target.y - enemy.y;
+    const edist = Math.hypot(edx, edy);
+    if (edist < 4) {
+      enemy.patrolIndex = (enemy.patrolIndex + 1) % enemy.patrol.length;
+    } else {
+      enemy.x += (edx / edist) * enemy.speed * SCALE * 0.5;
+      enemy.y += (edy / edist) * enemy.speed * SCALE * 0.5;
+    }
+
+    const playerDist = Math.hypot(
+      player.x + player.w / 2 - enemy.x - T * 0.35,
+      player.y + player.h / 2 - enemy.y - T * 0.4
+    );
+    const detectionRange = player.sneaking ? enemy.range * 0.4 : enemy.range;
+    const invisible = player._headphoneTimer > 0;
+
+    if (playerDist < detectionRange && !invisible) {
+      enemy.alerted = true;
+      const cdx = player.x - enemy.x, cdy = player.y - enemy.y;
+      const cdist = Math.hypot(cdx, cdy);
+      if (cdist > 0) {
+        enemy.x += (cdx / cdist) * enemy.speed * SCALE * 0.8;
+        enemy.y += (cdy / cdist) * enemy.speed * SCALE * 0.8;
+      }
+      if (playerDist < T * 0.6) {
+        game.state = 'pub';
+        game.gameOverReason = enemy.caught;
+      }
+    } else {
+      enemy.alerted = false;
+    }
+  }
+}
+
+function updateNpcMovement(dt) {
+  const room = rooms[game.currentRoom];
+  if (!room.npcs) return;
+  for (const npc of room.npcs) {
+    if (npc.chasePlayer) {
+      const dx = player.x - npc.x, dy = player.y - npc.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > T * 0.8) {
+        const speed = (npc.chaseSpeed || 0.15) * SCALE;
+        moveEnemyTowardTarget(npc, player.x, player.y, speed);
+      }
+    }
+    if (npc.roaming && !npc.chasePlayer) {
+      npc.roamTimer -= dt;
+      if (npc.roamTimer <= 0 || !npc.roamTarget) {
+        const minX = 2 * T, maxX = 14 * T;
+        const minY = 3 * T, maxY = 10 * T;
+        npc.roamTarget = {
+          x: minX + Math.random() * (maxX - minX),
+          y: minY + Math.random() * (maxY - minY),
+        };
+        npc.roamTimer = 4 + Math.random() * 5;
+      }
+      const dx = npc.roamTarget.x - npc.x, dy = npc.roamTarget.y - npc.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 4) {
+        moveEnemyTowardTarget(npc, npc.roamTarget.x, npc.roamTarget.y, npc.roamSpeed * SCALE);
+      }
+    }
+  }
+
+  // Sleeping Kunal - sends player back to office (works in any room)
+  for (const npc of room.npcs) {
+    if (npc.sleeping) {
+      const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+      if (dist < T * 1.5) {
+        game.workMeter = 0;
+        game.officeDoorUnlocked = false;
+        game.currentRoom = 'office';
+        const start = rooms.office.playerStart;
+        player.x = start.x; player.y = start.y;
+        game.state = 'interact';
+        game.dialogueQueue = [
+          "Kunal: *wakes up startled* BRAYDEN?! What are you doing here?!",
+          "Kunal: You're supposed to be WORKING! Come on, back to the office.",
+          "Kunal: *drags you back to your desk*",
+          "*Your work meter has been reset to 0! Toilet meter unchanged.*",
+        ];
+        game.currentDialogue = game.dialogueQueue.shift();
+        return;
+      }
+    }
+  }
+
+  if (game.currentRoom === 'lobby') {
+    for (const npc of room.npcs) {
+      if (npc.interactType === 'lax_lobby' && npc.chasePlayer) {
+        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+        if (dist < T * 0.8) {
+          game.time = Math.max(0, game.time - 90);
+          for (const k of room.npcs) {
+            if (k.sleeping) k.sleeping = false;
+          }
+          game.state = 'interact';
+          game.dialogueQueue = [
+            "Lax: Bro you look hungry. *shoves sandwich in your face*",
+            "Brayden: I don't have time for-",
+            "Lax: Just eat. Trust me.",
+            "*You ate Lax's sandwich. You lost 1:30 off the clock.*",
+            "Kunal: *wakes up from the sofa* What's going on? ...FOOD?!",
+            "*Kunal is now awake! Watch out...*",
+          ];
+          game.currentDialogue = game.dialogueQueue.shift();
+          npc.chasePlayer = false;
+          npc.x = npc.originX;
+          npc.y = npc.originY;
+          return;
+        }
+      }
+    }
+  }
+
+  if (game.currentRoom === 'lobby') {
+    for (const npc of room.npcs) {
+      if (npc.interactType === 'boss_patrol') {
+        npc.catchCooldown -= dt;
+        if (npc.catchCooldown <= 0) {
+          const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+          if (dist < npc.detectionRange && !player.isHiding && player._headphoneTimer <= 0) {
+            game.time -= 120;
+            game.workMeter = 0;
+            game.officeDoorUnlocked = false;
+            npc.catchCooldown = 30;
+            game.state = 'interact';
+            game.dialogueQueue = [...npc.dialogue];
+            game.currentDialogue = game.dialogueQueue.shift();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  if (game.currentRoom === 'toiletHall') {
+    for (const npc of room.npcs) {
+      if ((npc.interactType === 'kunal_hall' || npc.interactType === 'lax_hall') && npc.chasePlayer) {
+        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+        if (dist < T * 0.8) {
+          game.state = 'pub';
+          game.gameOverReason = `${npc.name} caught up to you in the hallway. "${npc.name === 'Kunal' ? "Come on mate, the pub's right there!" : "Bro just come with us, forget the toilet..."}" And just like that, you're at the pub.`;
+          return;
+        }
+      }
+      if (npc.interactType === 'karen_block' && !npc.interacted) {
+        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+        if (dist < npc.autoRange && !player.isHiding) {
+          npc.interacted = true;
+          game.time -= 30;
+          game.state = 'interact';
+          game.dialogueQueue = [...npc.dialogue];
+          game.currentDialogue = game.dialogueQueue.shift();
+          return;
+        }
+      }
+      if (npc.interactType === 'greg_story' && !npc.storyActive) {
+        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+        if (dist < npc.autoRange && !player.isHiding) {
+          npc.storyActive = true;
+          game.time -= 30;
+          game.state = 'interact';
+          game.dialogueQueue = [...npc.dialogue];
+          game.currentDialogue = game.dialogueQueue.shift();
+          return;
+        }
+      }
+    }
+  }
+
+  if (game.currentRoom === 'stairwell') {
+    for (const npc of room.npcs) {
+      if (npc.interactType === 'delivery_driver' && game.deliveryDriverMoved) {
+        npc.x = 2 * T;
+      }
+    }
+  }
+}
+
+function updateSaltProjectiles(dt) {
+  const room = rooms[game.currentRoom];
+  for (let i = game.saltProjectiles.length - 1; i >= 0; i--) {
+    const p = game.saltProjectiles[i];
+    p.x += p.dx * 6;
+    p.y += p.dy * 6;
+    p.life -= dt;
+
+    if (room.enemies) {
+      for (const enemy of room.enemies) {
+        if (enemy.dead) continue;
+        const dist = Math.hypot(p.x - enemy.x - T * 0.35, p.y - enemy.y - T * 0.4);
+        if (dist < T * 0.5) {
+          enemy.hp--;
+          if (enemy.hp <= 0) {
+            enemy.dead = true;
+          } else {
+            enemy.distracted = true;
+            enemy.distractTimer = 1;
+            enemy.alerted = false;
+          }
+          game.saltProjectiles.splice(i, 1);
+          break;
+        }
+      }
+    }
+
+    if (p.life <= 0 || p.x < 0 || p.x > canvas.width || p.y < 0 || p.y > canvas.height) {
+      game.saltProjectiles.splice(i, 1);
+    }
+  }
+}
+
+function updateTimers(dt) {
+  if (game.state !== 'playing') return;
+
+  game.time -= dt;
+  if (game.time <= 0) {
+    game.time = 0;
+    game.state = 'pub';
+    game.gameOverReason = "Time's up! You took too long and your bladder couldn't hold. Straight to the pub to drown your sorrows...";
+  }
+
+  if (game.energyDrinkWorkTimer > 0) {
+    game.energyDrinkWorkTimer -= dt;
+  }
+  if (game.energyDrinkToiletTimer > 0) {
+    game.energyDrinkToiletTimer -= dt;
+  }
+
+  if (player.imodiumTimer > 0) {
+    player.imodiumTimer -= dt;
+  }
+
+  let toiletRate = game.energyDrinkToiletTimer > 0 ? game.toiletRiseRate * 3 : game.toiletRiseRate;
+  if (player.imodiumTimer > 0) {
+    toiletRate *= 0.3;
+  }
+  game.toiletMeter = Math.min(game.maxToilet, game.toiletMeter + toiletRate * dt);
+  if (game.toiletMeter >= game.maxToilet) {
+    game.state = 'pub';
+    game.gameOverReason = "Your toilet meter hit 100%! You didn't make it in time... Embarrassed, you fled straight to the pub.";
+  }
+}
+
+function fireSalt() {
+  if (game.saltAmmo <= 0) return;
+  game.saltAmmo--;
+  let dx = 0, dy = 0;
+  if (player.facing === 'up') dy = -1;
+  else if (player.facing === 'down') dy = 1;
+  else if (player.facing === 'left') dx = -1;
+  else dx = 1;
+
+  game.saltProjectiles.push({
+    x: player.x + player.w / 2,
+    y: player.y + player.h / 2,
+    dx, dy,
+    life: 1.5,
+  });
+}
+
+function handleVendorBuy() {
+  if (game.vendorItems.length === 0) return;
+  const item = game.vendorItems[game.vendorMenuIndex];
+
+  // Special handling for paper balls
+  if (item.itemType === 'paper_balls') {
+    if (game.gold >= item.cost) {
+      game.gold -= item.cost;
+      game.paperBallAmmo = (game.paperBallAmmo || 0) + 5;
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Kunal: Here's 5 paper balls. Go cause some chaos!";
+      return;
+    } else {
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
+      return;
+    }
+  }
+
+  if (game.gold >= item.cost) {
+    game.gold -= item.cost;
+    // Give player the item
+    const emptySlot = player.inventory.indexOf(null);
+    if (emptySlot !== -1) {
+      player.inventory[emptySlot] = { name: item.name, itemType: item.itemType, type: 'pickup' };
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Kunal: Nice doing business! Here's your " + item.name + ".";
+    } else {
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Your pockets are full! Use or drop an item first.";
+    }
+  } else {
+    game.state = 'interact';
+    game.dialogueQueue = [];
+    game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
+  }
+}
+
+
+function tryInteract() {
+  if (!player.canInteract) return;
+  const { type, data } = player.canInteract;
+
+  if (type === 'fridge') {
+    game.state = 'fridgeMenu';
+    game.fridgeMenuIndex = 0;
+    return;
+  }
+
+  if (type === 'computer') {
+    // Don't open dialogue — holding E handles working directly in updatePlayer
+    return;
+  }
+
+  if (type === 'lockedDoor') {
+    game.state = 'interact';
+    game.dialogueQueue = [];
+    const pct = Math.floor(game.workMeter);
+    game.currentDialogue = `The door is LOCKED! You need to do more work first. (${pct}/${game.workThreshold}%) Hold [E] near a computer to work.`;
+    return;
+  }
+
+  if (type === 'door') {
+    if (data.toRoom === 'pub_exit') {
+      game.state = 'pub';
+      game.gameOverReason = "You walked right out the building! Fresh air hit you and you thought... why not the pub? Your mates would be proud.";
+      return;
+    }
+    game.currentRoom = data.toRoom;
+    player.x = data.toX * T; player.y = data.toY * T;
+    player.canInteract = null;
+    // Set occupied cubicle when entering toiletArea (Level 2 only - one cubicle is occupied)
+    if (data.toRoom === 'toiletArea') {
+      if (game.level === 2) {
+        const wt = rooms.toiletArea.winTiles;
+        game.occupiedCubicle = Math.floor(Math.random() * wt.length);
+      } else {
+        game.occupiedCubicle = -1; // Level 1: all cubicles are available
+      }
+    }
+    return;
+  }
+
+  if (type === 'npc') {
+    if (data.interactType === 'kunal_menu') {
+      game.state = 'npcMenu';
+      game.npcMenuTarget = data;
+      game.npcMenuIndex = 0;
+      game.npcMenuOptions = [
+        { label: 'Talk', desc: 'Have a chat (you two always end up arguing...)', action: 'kunal_talk' },
+        { label: 'Go to the Pub', desc: 'Sod it, let\'s go to the pub', action: 'pub' },
+      ];
+      return;
+    }
+    if (data.interactType === 'lax_menu') {
+      game.state = 'npcMenu';
+      game.npcMenuTarget = data;
+      game.npcMenuIndex = 0;
+      game.npcMenuOptions = [
+        { label: 'Talk', desc: 'Chat (Kunal always joins in...)', action: 'lax_talk' },
+        { label: 'Tell Them to Work', desc: 'Maybe Lax has some advice...', action: 'lax_work' },
+        { label: 'Go to the Pub', desc: 'Forget work, pub time', action: 'pub' },
+      ];
+      return;
+    }
+    if (data.interactType === 'kunal_lobby') {
+      game.state = 'interact';
+      game.dialogueQueue = ["Kunal: *snoring*... zzz..."];
+      game.currentDialogue = game.dialogueQueue.shift();
+      return;
+    }
+    if (data.interactType === 'lax_lobby') {
+      game.state = 'interact';
+      game.dialogueQueue = [
+        "Lax: *holding sandwich* You want some?",
+        "Brayden: I really don't have time-",
+        "Lax: Just eat. You look pale.",
+      ];
+      game.currentDialogue = game.dialogueQueue.shift();
+      return;
+    }
+    if (data.interactType === 'kunal_hall' || data.interactType === 'lax_hall') {
+      game.state = 'pub';
+      game.gameOverReason = `${data.name} convinced you to leave through the exit. "The pub's just round the corner!" And off you went...`;
+      return;
+    }
+    if (data.interactType === 'delivery_driver') {
+      game.deliveryDriverMoved = true;
+      game.state = 'interact';
+      game.dialogueQueue = [...data.dialogue];
+      game.currentDialogue = game.dialogueQueue.shift();
+      return;
+    }
+    if (data.interactType === 'boss_patrol') {
+      game.state = 'pub';
+      game.gameOverReason = "The boss caught you! 'My office. NOW.' ...off to the pub to drown your sorrows.";
+      return;
+    }
+    if (data.interactType === 'karen_block') {
+      if (!data.interacted) {
+        data.interacted = true;
+        game.time -= 30;
+        game.state = 'interact';
+        game.dialogueQueue = [...data.dialogue];
+        game.currentDialogue = game.dialogueQueue.shift();
+      }
+      return;
+    }
+    if (data.interactType === 'greg_story') {
+      if (!data.storyActive) {
+        data.storyActive = true;
+        game.time -= 30;
+        game.state = 'interact';
+        game.dialogueQueue = [...data.dialogue];
+        game.currentDialogue = game.dialogueQueue.shift();
+      }
+      return;
+    }
+
+    // Free roam quest givers
+    if (data.interactType === 'karin_quest' || data.interactType === 'rebecca_quest') {
+      const giverName = data.interactType === 'karin_quest' ? 'Karin' : 'Rebecca';
+      // Check if player has a quest item to turn in
+      const turnInQuest = game.quests.find(q => !q.completed && q.giver === giverName &&
+        player.inventory.some(inv => inv && inv.itemType === q.itemNeeded));
+      if (turnInQuest) {
+        // Turn in quest
+        const invIdx = player.inventory.findIndex(inv => inv && inv.itemType === turnInQuest.itemNeeded);
+        player.inventory[invIdx] = null;
+        turnInQuest.completed = true;
+        game.gold += turnInQuest.reward;
+        game.state = 'interact';
+        game.dialogueQueue = [
+          giverName + ": Oh perfect, you found it! Thank you so much!",
+          "*Quest Complete: " + turnInQuest.name + "!*",
+          "*Reward: +" + turnInQuest.reward + " Work Points! (Total: " + game.gold + ")*",
+        ];
+        game.currentDialogue = game.dialogueQueue.shift();
+        return;
+      }
+      // Offer available quests
+      const available = game.quests.filter(q => !q.completed && q.giver === giverName);
+      if (available.length > 0) {
+        game.state = 'npcMenu';
+        game.npcMenuTarget = data;
+        game.npcMenuIndex = 0;
+        game.npcMenuOptions = available.map(q => ({
+          label: q.name, desc: q.description + ' (' + q.rewardDesc + ')', action: 'accept_quest_' + q.id
+        }));
+        game.npcMenuOptions.push({ label: 'Never mind', desc: 'Leave', action: 'cancel' });
+        return;
+      } else {
+        game.state = 'interact';
+        game.dialogueQueue = [];
+        game.currentDialogue = giverName + ": Thanks for all the help! I've got nothing else right now.";
+        return;
+      }
+    }
+
+    // Kunal vendor
+    if (data.interactType === 'kunal_vendor') {
+      game.state = 'vendorMenu';
+      game.vendorMenuIndex = 0;
+      game.vendorItems = [
+        { name: 'Coffee', itemType: 'coffee', cost: 10, desc: 'Speed boost for 8 seconds' },
+        { name: 'Energy Drink', itemType: 'energy_drink', cost: 15, desc: 'Reduce toilet meter by 30' },
+        { name: 'Headphones', itemType: 'headphones', cost: 12, desc: 'Ignore phone rings for 6 seconds' },
+        { name: 'Imodium', itemType: 'imodium', cost: 20, desc: 'Slow toilet urgency for 20 seconds' },
+        { name: 'Paper Balls x5', itemType: 'paper_balls', cost: 8, desc: 'Distraction ammo' },
+        { name: 'Air Freshener', itemType: 'air_freshener', cost: 10, desc: 'Enemy repellent' },
+      ];
+      return;
+    }
+
+    // Andrew in pub
+    if (data.interactType === 'andrew_pub') {
+      game.state = 'interact';
+      game.dialogueQueue = ["Andrew: *holding 3 pints* PUB! This is the life!", "Andrew: Want one? Go on... just one pint...", "Brayden: I'm working Andrew! ...sort of."];
+      game.currentDialogue = game.dialogueQueue.shift();
+      return;
+    }
+    if (data.interactType === 'lax_pub') {
+      game.state = 'interact';
+      game.dialogueQueue = ["Lax: *nursing a beer* Bro... you made it.", "Lax: Pull up a stool. Relax.", "Brayden: I should probably get back to work...", "Lax: Work can wait. Life is short bro."];
+      game.currentDialogue = game.dialogueQueue.shift();
+      return;
+    }
+
+    game.state = 'interact';
+    game.dialogueQueue = [...data.dialogue];
+    game.currentDialogue = game.dialogueQueue.shift();
+    return;
+  }
+
+  if (type === 'item') {
+    const emptySlot = player.inventory.indexOf(null);
+    if (emptySlot !== -1) {
+      player.inventory[emptySlot] = { ...data };
+      data.collected = true;
+      player.canInteract = null;
+    } else {
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Your pockets are full! You can only carry 2 items. Use one first with [1] or [2].";
+    }
+    return;
+  }
+}
+
+function pickFromFridge() {
+  if (game.fridgeItems.length === 0) return;
+  const itemType = game.fridgeItems[game.fridgeMenuIndex];
+
+  if (itemType === 'salt') {
+    game.saltAmmo = game.saltMax;
+    game.fridgeItems.splice(game.fridgeMenuIndex, 1);
+    game.state = 'interact';
+    game.dialogueQueue = [];
+    game.currentDialogue = "You grabbed the salt! 10 shots loaded. Press [SPACE] to fire in the direction you're facing. 3 hits to defeat Andrew!";
+  } else if (itemType === 'beer') {
+    game.fridgeItems.splice(game.fridgeMenuIndex, 1);
+    game.state = 'pub';
+    game.gameOverReason = "You drank a beer from the office fridge. One turned into two... two into five... and now you're at the pub. Classic.";
+  } else if (itemType === 'energy_drink') {
+    game.energyDrinkWorkTimer = 10;
+    game.energyDrinkToiletTimer = 15;
+    game.fridgeItems.splice(game.fridgeMenuIndex, 1);
+    game.state = 'interact';
+    game.dialogueQueue = [];
+    game.currentDialogue = "You chugged the energy drink! Work speed BOOSTED for 10 seconds! But watch out... your toilet meter will fill faster for 15 seconds!";
+  }
+
+  if (game.fridgeMenuIndex >= game.fridgeItems.length) {
+    game.fridgeMenuIndex = Math.max(0, game.fridgeItems.length - 1);
+  }
+}
+
+function advanceDialogue() {
+  if (game.dialogueQueue.length > 0) {
+    game.currentDialogue = game.dialogueQueue.shift();
+  } else {
+    game.currentDialogue = null;
+    game.state = 'playing';
+  }
+}
+
+function handleNpcMenuSelect() {
+  if (game.npcMenuOptions.length === 0) return;
+  const option = game.npcMenuOptions[game.npcMenuIndex];
+
+  if (option.action === 'cancel') {
+    game.state = 'playing';
+    return;
+  }
+
+  if (option.action.startsWith('accept_quest_')) {
+    const questId = option.action.replace('accept_quest_', '');
+    const quest = game.quests.find(q => q.id === questId);
+    if (quest) {
+      game.activeQuest = quest;
+      game.state = 'interact';
+      game.dialogueQueue = [
+        quest.giver + ": " + quest.description,
+        "*New Quest: " + quest.name + "*",
+        "*Find: " + quest.itemNeeded.replace(/_/g, ' ') + "*",
+      ];
+      game.currentDialogue = game.dialogueQueue.shift();
+    }
+    return;
+  }
+
+  if (option.action === 'pub') {
+    game.state = 'pub';
+    game.gameOverReason = "You and your mates decided work can wait. Off to the pub! Cheers!";
+    return;
+  }
+
+  if (option.action === 'kunal_talk') {
+    game.workMeter = 0;
+    game.officeDoorUnlocked = false;
+    game.time = Math.max(0, game.time - 60);
+    game.state = 'interact';
+    game.dialogueQueue = [
+      "Kunal: Bro, I'm telling you, tabs are better than spaces!",
+      "Brayden: Are you INSANE? Spaces are the standard!",
+      "Kunal: Standard?! Your code looks like a ransom note!",
+      "Brayden: At least I don't push to main on a Friday!",
+      "Kunal: That was ONE time! And the server survived... mostly.",
+      "*You've been arguing for a while... Work meter dropped to 0 and you lost 1 minute!*",
+    ];
+    game.currentDialogue = game.dialogueQueue.shift();
+    return;
+  }
+
+  if (option.action === 'lax_talk') {
+    game.workMeter = 0;
+    game.officeDoorUnlocked = false;
+    game.time = Math.max(0, game.time - 120);
+    game.state = 'interact';
+    game.dialogueQueue = [
+      "Lax: *takes off one headphone* What's good?",
+      "Brayden: Just trying to get some work done...",
+      "Kunal: *walks over* Oh, we're having a meeting? Nice.",
+      "Lax: So anyway, did you see that new show on Netflix?",
+      "Kunal: Bro yes! The one with the time travel?",
+      "Brayden: Guys... I really need to work...",
+      "Lax: Relax man, the deadline's not for... *checks phone* ...oh.",
+      "Kunal: Yeah we should probably let him work.",
+      "*The three of you chatted for way too long... Work meter dropped to 0 and you lost 2 minutes!*",
+    ];
+    game.currentDialogue = game.dialogueQueue.shift();
+    return;
+  }
+
+  if (option.action === 'lax_work') {
+    game.workMeter = Math.max(0, game.workMeter * 0.5);
+    if (game.workMeter < game.workThreshold) game.officeDoorUnlocked = false;
+    game.state = 'interact';
+    game.dialogueQueue = [
+      "Brayden: Lax, come on mate, we need to actually do some work.",
+      "Lax: *slowly puts headphones down* ...Work?",
+      "Lax: Bro, you're the one who came to talk to ME.",
+      "Lax: If you wanna work, go sit at your desk instead of chatting.",
+      "Lax: Actually... you should work LESS. You look stressed.",
+      "*Lax's 'advice' has demotivated you. Work meter dropped by 50%!*",
+    ];
+    game.currentDialogue = game.dialogueQueue.shift();
+    return;
+  }
+}
+
+function useItem(slot) {
+  const item = player.inventory[slot];
+  if (!item) return;
+  const itemType = item.itemType || item.type;
+  switch (itemType) {
+    case 'coffee': player._coffeeBoost = 8; break;
+    case 'headphones': player._headphoneTimer = 6; break;
+    case 'imodium': player.imodiumTimer = 20; break;
+    case 'air_freshener': throwPaperBall(); break;
+    case 'energy_drink':
+      game.toiletMeter = Math.max(0, game.toiletMeter - 30);
+      break;
+  }
+  player.inventory[slot] = null;
+}
+
+
+function drawTitleCharacter(cx, cy, who, scale) {
+  const s = scale || 1.8;
+  const pr = (x, y, w, h, c) => drawPixelRect(cx + x * s, cy + y * s, w * s, h * s, c);
+  if (who === 'brayden') {
+    // Shoes
+    pr(3, 38, 7, 4, C.playerShoes); pr(18, 38, 7, 4, C.playerShoes);
+    // Trousers
+    pr(3, 26, 7, 13, C.playerTrousers); pr(18, 26, 7, 13, C.playerTrousers);
+    // Belt
+    pr(2, 25, 24, 3, '#6a5a3a'); pr(12, 25, 4, 3, '#8a7a4a');
+    // Shirt
+    pr(2, 12, 24, 14, C.playerShirt);
+    pr(4, 12, 4, 3, '#d0e8f8'); pr(20, 12, 4, 3, '#d0e8f8');
+    // Tie
+    pr(12, 14, 3, 10, C.playerTie); pr(11, 23, 5, 3, C.playerTie);
+    // Head
+    pr(5, 2, 18, 14, C.playerSkin);
+    // Hair
+    pr(3, -3, 22, 8, C.playerHair); pr(4, -5, 20, 5, C.playerHair);
+    pr(2, 0, 4, 6, C.playerHair); pr(22, -1, 4, 6, C.playerHair);
+    pr(6, -4, 8, 3, '#e0c460');
+    // Eyes
+    pr(8, 8, 3, 3, '#4a2a0a'); pr(17, 8, 3, 3, '#4a2a0a');
+    // Mouth (grimacing)
+    pr(10, 13, 8, 2, '#c87a5a');
+    pr(10, 14, 2, 1, '#fff'); pr(13, 14, 2, 1, '#fff'); pr(16, 14, 2, 1, '#fff');
+    // Arms
+    pr(0, 14, 3, 10, C.playerShirt); pr(25, 14, 3, 10, C.playerShirt);
+    pr(0, 23, 3, 3, C.playerSkin); pr(25, 23, 3, 3, C.playerSkin);
+    // Toilet roll in hand
+    pr(-3, 22, 5, 5, '#fff'); pr(-2, 23, 3, 3, '#eee'); pr(-1, 24, 1, 1, '#ccc');
+  } else if (who === 'kunal') {
+    const skin = '#b08860', hair = '#2a2a2a', hoodie = '#3a8a3a', hoodieDk = '#2a6a2a';
+    pr(3, 38, 8, 5, '#eee'); pr(17, 38, 8, 5, '#eee');
+    pr(4, 28, 7, 11, '#3a3a3a'); pr(17, 28, 7, 11, '#3a3a3a');
+    pr(1, 12, 26, 18, hoodie);
+    pr(9, 22, 10, 5, hoodieDk);
+    pr(10, 13, 2, 6, '#ddd'); pr(16, 13, 2, 6, '#ddd');
+    pr(3, 0, 22, 3, hoodieDk);
+    pr(5, 2, 18, 14, skin);
+    pr(5, 0, 18, 5, hair);
+    pr(8, 8, 3, 3, '#1a1a1a'); pr(17, 8, 3, 3, '#1a1a1a');
+    pr(10, 12, 6, 2, '#8a6040');
+  } else if (who === 'lax') {
+    const skin = '#7a5a3a', hair = '#2a1a0a', hoodie = '#3a3a3a', hoodieDk = '#2a2a2a';
+    pr(3, 38, 8, 5, '#eee'); pr(17, 38, 8, 5, '#eee');
+    pr(4, 27, 7, 12, '#8aaabb'); pr(17, 27, 7, 12, '#8aaabb');
+    pr(2, 12, 24, 17, hoodie);
+    pr(10, 12, 8, 4, '#ddd');
+    pr(13, 15, 2, 12, '#555');
+    pr(5, 2, 18, 14, skin);
+    pr(5, 0, 18, 5, hair); pr(6, -2, 16, 3, hair);
+    pr(6, 12, 16, 4, '#2a1a0a'); // beard
+    pr(8, 8, 3, 2, '#111'); pr(17, 8, 3, 2, '#111');
+    // Headphones
+    pr(3, -1, 22, 3, '#555');
+    pr(2, 2, 5, 8, '#444'); pr(21, 2, 5, 8, '#444');
+    pr(3, 3, 3, 6, '#333'); pr(22, 3, 3, 6, '#333');
+  } else if (who === 'andrew') {
+    const skin = '#d8c8b0', hair = '#6a5a3a', shirt = '#7a7a8a';
+    pr(3, 38, 8, 5, '#3a2a1a'); pr(17, 38, 8, 5, '#3a2a1a');
+    pr(4, 27, 7, 12, '#4a4a4a'); pr(17, 27, 7, 12, '#4a4a4a');
+    pr(2, 12, 24, 17, shirt);
+    pr(5, 2, 18, 14, skin);
+    pr(4, -2, 20, 6, hair);
+    pr(3, 0, 4, 4, hair); pr(21, -1, 4, 5, hair);
+    // Zombie eyes
+    pr(7, 7, 4, 4, '#fff'); pr(17, 7, 4, 4, '#fff');
+    pr(8, 8, 2, 2, '#222'); pr(18, 8, 2, 2, '#222');
+    pr(7, 11, 4, 2, '#b0a090'); pr(17, 11, 4, 2, '#b0a090');
+    // Mouth
+    pr(10, 13, 6, 2, '#8a6a5a');
+    // Arms out zombie-style
+    pr(-4, 14, 6, 4, shirt); pr(26, 14, 6, 4, shirt);
+    pr(-6, 14, 3, 3, skin); pr(30, 14, 3, 3, skin);
+    // Speech bubble
+    pr(27, -8, 22, 10, '#fff');
+    ctx.fillStyle = '#333'; ctx.font = `bold ${8 * s}px monospace`;
+    ctx.fillText('Pub?', cx + 28 * s, cy - 1 * s);
+  }
+}
+
+function drawTitleDesk(x, y, s) {
+  // Desk surface
+  drawPixelRect(x, y, 40 * s, 20 * s, '#8a7050');
+  drawPixelRect(x + 1 * s, y + 1 * s, 38 * s, 2 * s, '#a08860');
+  // Legs
+  drawPixelRect(x + 2 * s, y + 18 * s, 3 * s, 10 * s, '#6a5a40');
+  drawPixelRect(x + 35 * s, y + 18 * s, 3 * s, 10 * s, '#6a5a40');
+  // Monitor
+  drawPixelRect(x + 12 * s, y - 18 * s, 18 * s, 14 * s, '#333');
+  drawPixelRect(x + 13 * s, y - 17 * s, 16 * s, 11 * s, '#4488aa');
+  // Screen glow / text lines
+  drawPixelRect(x + 15 * s, y - 14 * s, 10 * s, 1 * s, '#66aacc');
+  drawPixelRect(x + 15 * s, y - 11 * s, 8 * s, 1 * s, '#66aacc');
+  drawPixelRect(x + 15 * s, y - 8 * s, 12 * s, 1 * s, '#66aacc');
+  // Monitor stand
+  drawPixelRect(x + 18 * s, y - 4 * s, 6 * s, 5 * s, '#444');
+  drawPixelRect(x + 15 * s, y, 12 * s, 2 * s, '#555');
+  // Keyboard
+  drawPixelRect(x + 10 * s, y + 4 * s, 14 * s, 5 * s, '#ddd');
+  drawPixelRect(x + 11 * s, y + 5 * s, 12 * s, 3 * s, '#ccc');
+  // Mouse
+  drawPixelRect(x + 28 * s, y + 5 * s, 4 * s, 6 * s, '#eee');
+  // Coffee mug
+  drawPixelRect(x + 2 * s, y + 2 * s, 6 * s, 7 * s, '#ddd');
+  drawPixelRect(x + 3 * s, y + 3 * s, 4 * s, 4 * s, '#6a3a1a');
+  drawPixelRect(x + 7 * s, y + 4 * s, 2 * s, 3 * s, '#ddd');
+}
+
+function drawTitlePapers(x, y, s) {
+  // Scattered papers
+  drawPixelRect(x, y, 10 * s, 13 * s, '#f0ead8');
+  drawPixelRect(x + 1 * s, y + 2 * s, 7 * s, 1 * s, '#bbb');
+  drawPixelRect(x + 1 * s, y + 4 * s, 6 * s, 1 * s, '#bbb');
+  drawPixelRect(x + 1 * s, y + 6 * s, 8 * s, 1 * s, '#bbb');
+  // Second sheet slightly rotated
+  drawPixelRect(x + 4 * s, y + 3 * s, 10 * s, 13 * s, '#e8e2d0');
+  drawPixelRect(x + 5 * s, y + 5 * s, 7 * s, 1 * s, '#aaa');
+  drawPixelRect(x + 5 * s, y + 7 * s, 5 * s, 1 * s, '#aaa');
+  drawPixelRect(x + 5 * s, y + 9 * s, 8 * s, 1 * s, '#aaa');
+}
+
+function drawTitleFridge(x, y, s) {
+  drawPixelRect(x, y, 16 * s, 30 * s, '#d0d8e0');
+  drawPixelRect(x + 1 * s, y + 1 * s, 14 * s, 16 * s, '#bcc4cc');
+  drawPixelRect(x + 1 * s, y + 18 * s, 14 * s, 11 * s, '#b0b8c0');
+  drawPixelRect(x + 12 * s, y + 5 * s, 2 * s, 8 * s, '#999');
+  drawPixelRect(x + 12 * s, y + 20 * s, 2 * s, 6 * s, '#999');
+  // Magnets
+  drawPixelRect(x + 3 * s, y + 3 * s, 3 * s, 3 * s, '#e44');
+  drawPixelRect(x + 7 * s, y + 6 * s, 3 * s, 3 * s, '#44e');
+  drawPixelRect(x + 4 * s, y + 10 * s, 3 * s, 3 * s, '#4a4');
+}
+
+function drawTitleToilet(x, y, s) {
+  // Glow
+  ctx.shadowColor = '#d8c0f0';
+  ctx.shadowBlur = 16 + Math.sin(game.frameCount * 0.04) * 6;
+  // Tank
+  drawPixelRect(x + 6 * s, y, 16 * s, 8 * s, '#e8e0f8');
+  ctx.shadowBlur = 0;
+  drawPixelRect(x + 8 * s, y + 2 * s, 12 * s, 4 * s, '#d0c0e8');
+  // Flush handle
+  drawPixelRect(x + 20 * s, y + 2 * s, 4 * s, 2 * s, '#ccc');
+  // Seat
+  drawPixelRect(x + 4 * s, y + 8 * s, 20 * s, 3 * s, '#f0eaf8');
+  // Bowl
+  drawPixelRect(x + 2 * s, y + 8 * s, 24 * s, 16 * s, '#e8e0f8');
+  drawPixelRect(x + 4 * s, y + 10 * s, 20 * s, 12 * s, '#d0c0e8');
+  drawPixelRect(x + 7 * s, y + 12 * s, 14 * s, 6 * s, '#b0a0d0');
+  // Water
+  drawPixelRect(x + 9 * s, y + 13 * s, 10 * s, 3 * s, 'rgba(100, 150, 220, 0.35)');
+  // Base
+  drawPixelRect(x + 4 * s, y + 22 * s, 20 * s, 5 * s, '#dcd4ec');
+  drawPixelRect(x + 6 * s, y + 25 * s, 16 * s, 4 * s, '#ccc4dc');
+  // Sparkle
+  if (Math.sin(game.frameCount * 0.08) > 0) {
+    ctx.fillStyle = '#fff'; ctx.font = `${10 * s}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('*', x - 2 * s, y + 6 * s);
+    ctx.fillText('*', x + 28 * s, y + 2 * s);
+  }
+  // Stink
+  const so = Math.sin(game.frameCount * 0.06) * 3 * s;
+  ctx.fillStyle = 'rgba(140, 200, 80, 0.3)'; ctx.font = `${10 * s}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('~', x + 6 * s, y - 4 * s + so);
+  ctx.fillText('~', x + 16 * s, y - 8 * s + so * 0.6);
+  ctx.fillText('~', x + 24 * s, y - 2 * s + so * 1.2);
+}
+
+function drawTitleChair(x, y, s) {
+  // Seat
+  drawPixelRect(x, y, 12 * s, 4 * s, '#3a5a8a');
+  // Back
+  drawPixelRect(x + 1 * s, y - 10 * s, 10 * s, 11 * s, '#3a5a8a');
+  drawPixelRect(x + 2 * s, y - 9 * s, 8 * s, 8 * s, '#4a6a9a');
+  // Legs
+  drawPixelRect(x + 2 * s, y + 4 * s, 2 * s, 6 * s, '#666');
+  drawPixelRect(x + 8 * s, y + 4 * s, 2 * s, 6 * s, '#666');
+  // Wheels
+  drawPixelRect(x, y + 9 * s, 3 * s, 2 * s, '#555');
+  drawPixelRect(x + 9 * s, y + 9 * s, 3 * s, 2 * s, '#555');
+}
+
+function drawTitlePlant(x, y, s) {
+  // Pot
+  drawPixelRect(x + 2 * s, y + 8 * s, 8 * s, 8 * s, '#a06030');
+  drawPixelRect(x + 1 * s, y + 7 * s, 10 * s, 3 * s, '#b07040');
+  // Leaves
+  drawPixelRect(x + 3 * s, y, 6 * s, 10 * s, '#3a8a3a');
+  drawPixelRect(x, y + 2 * s, 4 * s, 6 * s, '#2a7a2a');
+  drawPixelRect(x + 8 * s, y + 1 * s, 4 * s, 7 * s, '#4a9a3a');
+  drawPixelRect(x + 4 * s, y - 3 * s, 4 * s, 5 * s, '#3a8a2a');
+}
+
+function drawTitleBraydenAnimated(bx, by, s, frame, facingLeft) {
+  // Animated Brayden with clenching walk cycle
+  const pr = (x, y, w, h, c) => drawPixelRect(bx + x * s, by + y * s, w * s, h * s, c);
+  const legAnim = Math.sin(frame * 0.06) * 2.5;
+  const bob = Math.abs(Math.sin(frame * 0.06)) * 1.2;
+  const clench = Math.sin(frame * 0.25) * 1; // shudder/clench
+  const bY = bob + clench;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(bx + 14 * s, by + 43 * s, 12 * s, 3 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shoes (animated)
+  pr(3, 38 + legAnim * 0.3, 7, 4, C.playerShoes);
+  pr(18, 38 - legAnim * 0.3, 7, 4, C.playerShoes);
+  // Trousers (animated legs)
+  pr(3, 26, 7, 12 + legAnim * 0.3, C.playerTrousers);
+  pr(18, 26, 7, 12 - legAnim * 0.3, C.playerTrousers);
+  // Belt
+  pr(2, 25 + bY, 24, 3, '#6a5a3a'); pr(12, 25 + bY, 4, 3, '#8a7a4a');
+  // Shirt
+  pr(2, 12 + bY, 24, 14, C.playerShirt);
+  pr(4, 12 + bY, 4, 3, '#d0e8f8'); pr(20, 12 + bY, 4, 3, '#d0e8f8');
+  // Tie
+  pr(12, 14 + bY, 3, 10, C.playerTie); pr(11, 23 + bY, 5, 3, C.playerTie);
+  // Head
+  pr(5, 2 + bY, 18, 14, C.playerSkin);
+  // Hair
+  pr(3, -3 + bY, 22, 8, C.playerHair); pr(4, -5 + bY, 20, 5, C.playerHair);
+  pr(2, 0 + bY, 4, 6, C.playerHair); pr(22, -1 + bY, 4, 6, C.playerHair);
+  pr(6, -4 + bY, 8, 3, '#e0c460');
+  // Eyes — looking in walk direction, sweating
+  if (facingLeft) {
+    pr(6, 8 + bY, 3, 3, '#4a2a0a');
+    pr(14, 8 + bY, 3, 3, '#4a2a0a');
+  } else {
+    pr(10, 8 + bY, 3, 3, '#4a2a0a');
+    pr(19, 8 + bY, 3, 3, '#4a2a0a');
+  }
+  // Grimacing mouth — teeth gritted
+  pr(9, 13 + bY, 10, 2, '#c87a5a');
+  pr(10, 13 + bY, 2, 2, '#fff'); pr(13, 13 + bY, 2, 2, '#fff'); pr(16, 13 + bY, 2, 2, '#fff');
+  // Sweat drops
+  const sweatDrop = Math.sin(frame * 0.08) * 2;
+  pr(24, 4 + bY + sweatDrop, 2, 3, '#88ccff');
+  if (Math.sin(frame * 0.06) > 0.3) pr(0, 6 + bY + sweatDrop * 0.7, 2, 2, '#88ccff');
+  // Arms — clenched fists at sides, tense
+  pr(0, 14 + bY, 3, 10, C.playerShirt); pr(25, 14 + bY, 3, 10, C.playerShirt);
+  pr(0, 23 + bY, 3, 3, C.playerSkin); pr(25, 23 + bY, 3, 3, C.playerSkin);
+  // Toilet roll clutched in one hand
+  if (facingLeft) {
+    pr(-3, 21 + bY, 5, 5, '#fff'); pr(-2, 22 + bY, 3, 3, '#eee');
+  } else {
+    pr(26, 21 + bY, 5, 5, '#fff'); pr(27, 22 + bY, 3, 3, '#eee');
+  }
+}
+
+function drawTitle() {
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2;
+  const floorY = H * 0.45;
+
+  // ---- OFFICE WALL ----
+  ctx.fillStyle = '#3a4468';
+  ctx.fillRect(0, 0, W, floorY);
+  ctx.strokeStyle = 'rgba(60, 70, 110, 0.25)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 20; i++) {
+    ctx.beginPath(); ctx.moveTo(0, i * 15); ctx.lineTo(W, i * 15); ctx.stroke();
+  }
+  // Skirting board
+  drawPixelRect(0, floorY - 5, W, 5, '#2a2a3a');
+
+  // ---- OFFICE FLOOR ----
+  ctx.fillStyle = '#4a506a';
+  ctx.fillRect(0, floorY, W, H - floorY);
+  ctx.strokeStyle = 'rgba(70, 76, 100, 0.4)';
+  for (let r = 0; r < 12; r++) {
+    const fy = floorY + r * 20;
+    ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(W, fy); ctx.stroke();
+  }
+  for (let c = 0; c < 18; c++) {
+    ctx.beginPath(); ctx.moveTo(c * 50, floorY); ctx.lineTo(c * 50, H); ctx.stroke();
+  }
+
+  // ---- OFFICE FURNITURE ----
+  const fs = 2;
+
+  // Back wall furniture (above floor line)
+  // Left desk
+  drawTitleDesk(10, floorY - 6, fs);
+  drawTitlePapers(20, floorY + 4, fs * 0.7);
+  // Right desk
+  drawTitleDesk(W - 110, floorY - 6, fs);
+  drawTitlePapers(W - 72, floorY + 2, fs * 0.7);
+  // Fridge far left
+  drawTitleFridge(8, floorY - 72, fs);
+  // Plant far right
+  drawTitlePlant(W - 40, floorY - 44, fs);
+  // Second plant left
+  drawTitlePlant(120, floorY - 36, fs * 0.8);
+
+  // Water cooler right
+  const wcx = W - 82, wcy = floorY - 55;
+  drawPixelRect(wcx, wcy + 10 * fs, 8 * fs, 18 * fs, '#ccc');
+  drawPixelRect(wcx - 1 * fs, wcy + 8 * fs, 10 * fs, 4 * fs, '#ddd');
+  drawPixelRect(wcx + 1 * fs, wcy, 6 * fs, 10 * fs, 'rgba(100, 180, 220, 0.4)');
+
+  // Chairs on floor
+  drawTitleChair(50, floorY + 22, fs);
+  drawTitleChair(W - 84, floorY + 22, fs);
+
+  // Centre back — the glowing TOILET
+  const toiletS = 2.6;
+  const toiletX = cx - 14 * toiletS, toiletY = floorY - 28 * toiletS + 16;
+  drawTitleToilet(toiletX, toiletY, toiletS);
+
+  // Toilet roll on floor near toilet
+  const trx = toiletX + 26 * toiletS, trY = toiletY + 20 * toiletS;
+  drawPixelRect(trx, trY, 5 * toiletS, 5 * toiletS, '#fff');
+  drawPixelRect(trx + toiletS, trY + toiletS, 3 * toiletS, 3 * toiletS, '#eee');
+  // Paper trail
+  drawPixelRect(trx + 4 * toiletS, trY + 2 * toiletS, 10 * toiletS, 2 * toiletS, '#f8f4e8');
+
+  // ---- BRAYDEN PACING BACK AND FORTH ----
+  // Brayden walks left and right across the floor, clenching
+  const paceRange = 280; // total pixels of pacing
+  const paceSpeed = 0.003;
+  const paceCycle = (game.frameCount * paceSpeed) % 2; // 0->1 = right, 1->2 = left
+  const facingLeft = paceCycle >= 1;
+  const paceT = paceCycle < 1 ? paceCycle : 2 - paceCycle; // 0 to 1 and back
+  const braydenX = cx - paceRange / 2 + paceT * paceRange;
+  const braydenY = floorY + 50;
+  const braydenS = 2.6;
+
+  drawTitleBraydenAnimated(braydenX - 14 * braydenS, braydenY, braydenS, game.frameCount, facingLeft);
+
+  // Thought bubble above Brayden (rotating clenching quips)
+  const quips = [
+    'Must... not... shit...',
+    'Touching cloth!!',
+    'CLENCH!!!',
+    'Why is the toilet so far?!',
+    'Prairie dogging...',
+    'This is CODE BROWN!',
+    'I need that cubicle NOW',
+    'NOT. YET.',
+  ];
+  const qIdx = Math.floor(game.frameCount / 120) % quips.length;
+  const bubX = braydenX, bubY = braydenY - 16;
+  ctx.textAlign = 'center';
+  // Thought dots
+  drawPixelRect(bubX - 4, bubY + 4, 4, 4, '#fff');
+  drawPixelRect(bubX - 10, bubY - 2, 6, 6, '#fff');
+  // Bubble
+  const quipText = quips[qIdx];
+  ctx.font = 'bold 10px monospace';
+  const tw = ctx.measureText(quipText).width;
+  const bubW = tw + 16, bubH = 20;
+  drawPixelRect(bubX - bubW / 2, bubY - bubH - 8, bubW, bubH, '#fff');
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1;
+  ctx.strokeRect(bubX - bubW / 2, bubY - bubH - 8, bubW, bubH);
+  ctx.fillStyle = '#333';
+  ctx.fillText(quipText, bubX, bubY - bubH + 5);
+
+  // ---- TITLE PANEL (top, clean) ----
+  drawPixelRect(cx - 250, 10, 500, 90, 'rgba(0, 0, 0, 0.75)');
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2;
+  ctx.strokeRect(cx - 250, 10, 500, 90);
+  ctx.lineWidth = 1;
+
+  ctx.fillStyle = '#000'; ctx.font = 'bold 32px monospace';
+  ctx.fillText("BRAYDEN'S TOILET", cx + 2, 44);
+  ctx.fillText("ADVENTURE", cx + 2, 74);
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 32px monospace';
+  ctx.fillText("BRAYDEN'S TOILET", cx, 42);
+  ctx.fillText("ADVENTURE", cx, 72);
+  ctx.fillStyle = '#cc3333'; ctx.font = 'bold 12px monospace';
+  ctx.fillText("THE TOILET QUEST", cx, 92);
+
+  // ---- BOTTOM INFO PANEL ----
+  drawPixelRect(cx - 270, H - 148, 540, 138, 'rgba(0, 0, 0, 0.75)');
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+  ctx.strokeRect(cx - 270, H - 148, 540, 138);
+
+  // ---- LEVEL SELECT ----
+  const levels = [
+    { name: 'LEVEL 1 - Quick Dash', desc: '3 rooms  |  Get to the toilet ASAP!' },
+    { name: 'LEVEL 2 - The Gauntlet', desc: '5 rooms  |  Stealth, items & more chaos' },
+    { name: 'FREE ROAM - Open World', desc: 'Explore, quests, pub visits & trade!' },
+  ];
+  const selY = H - 140;
+  ctx.fillStyle = '#ddd'; ctx.font = 'bold 14px monospace';
+  ctx.fillText('SELECT LEVEL', cx, selY + 12);
+
+  for (let i = 0; i < levels.length; i++) {
+    const ly = selY + 24 + i * 26;
+    const selected = game.levelSelectIndex === i;
+    if (selected) {
+      drawPixelRect(cx - 200, ly - 10, 400, 24, 'rgba(255, 215, 0, 0.15)');
+      ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1;
+      ctx.strokeRect(cx - 200, ly - 10, 400, 24);
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px monospace';
+      ctx.fillText('> ' + levels[i].name + ' <', cx, ly + 4);
+      ctx.fillStyle = '#ccc'; ctx.font = '10px monospace';
+      ctx.fillText(levels[i].desc, cx, ly + 15);
+    } else {
+      ctx.fillStyle = '#888'; ctx.font = '13px monospace';
+      ctx.fillText(levels[i].name, cx, ly + 4);
+    }
+  }
+
+  ctx.fillStyle = '#999'; ctx.font = '10px monospace';
+  ctx.fillText('WASD - Move  |  SHIFT - Sneak  |  E - Interact  |  SPACE - Throw Salt', cx, H - 50);
+  ctx.fillText('Hold E near computer to work  |  1/2 - Use Items  |  H - Hide  |  Q - Paper Ball', cx, H - 36);
+
+  // Flavour text
+  const flavourTexts = [
+    '"I should NOT have had that curry..." - Brayden',
+    '"Pub?" - Andrew, every 3 seconds',
+    '"You look rough mate" - Kunal',
+    '"Chill bro, just hold it in" - Lax',
+    'This is a CODE BROWN situation.',
+    'Prairie dogging level: CRITICAL',
+    'The toilet is SO close... yet so far.',
+    'Andrew approaches... "Pub?"',
+  ];
+  const flavIdx = Math.floor(game.frameCount / 180) % flavourTexts.length;
+  ctx.fillStyle = '#777'; ctx.font = 'italic 10px monospace';
+  ctx.fillText(flavourTexts[flavIdx], cx, H - 20);
+
+  // Blink prompt
+  game.titleBlink += 0.05;
+  if (Math.sin(game.titleBlink) > 0) {
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px monospace';
+    ctx.fillText('W/S TO SELECT  |  ENTER TO START', cx, H - 4);
+  }
+  ctx.textAlign = 'left';
+}
+
+// --- PUB SCREEN ---
+function drawPubScreen() {
+  // Warm pub background
+  ctx.fillStyle = '#1a0e06';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Pub wall (warm wood tones)
+  const wallGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
+  wallGrad.addColorStop(0, '#2a1a0a');
+  wallGrad.addColorStop(1, '#3a2510');
+  ctx.fillStyle = wallGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height * 0.55);
+
+  // Hanging pub sign
+  drawPixelRect(canvas.width / 2 - 60, 16, 120, 36, '#5a3a1a');
+  drawPixelRect(canvas.width / 2 - 58, 18, 116, 32, '#7a5a2a');
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('THE SLIPPERY', canvas.width / 2, 34);
+  ctx.fillText('TOILET SEAT', canvas.width / 2, 48);
+
+  // Bar counter (thick wood)
+  drawPixelRect(30, canvas.height * 0.52, canvas.width - 60, 28, '#5a3a1a');
+  drawPixelRect(32, canvas.height * 0.52 + 2, canvas.width - 64, 10, '#8a6a3a');
+  drawPixelRect(32, canvas.height * 0.52 + 14, canvas.width - 64, 4, '#7a5a2a');
+
+  // Beer taps
+  for (let i = 0; i < 3; i++) {
+    const tapX = canvas.width / 2 - 60 + i * 60, tapY = canvas.height * 0.52 - 36;
+    drawPixelRect(tapX, tapY, 6, 30, '#888');
+    drawPixelRect(tapX - 4, tapY - 4, 14, 8, '#aaa');
+    drawPixelRect(tapX - 2, tapY + 26, 10, 6, '#666');
+  }
+
+  // Beer glasses on counter (animated bubbles)
+  for (let i = 0; i < 6; i++) {
+    const gx = 80 + i * 100, gy = canvas.height * 0.52 - 26;
+    drawPixelRect(gx, gy, 18, 26, 'rgba(200, 200, 255, 0.2)');
+    drawPixelRect(gx + 2, gy + 6, 14, 18, '#daa520');
+    drawPixelRect(gx + 2, gy + 2, 14, 6, '#fffde0');
+    // Bubbles
+    const bubOff = (game.frameCount * 0.5 + i * 7) % 14;
+    ctx.fillStyle = 'rgba(255,255,200,0.3)';
+    ctx.fillRect(gx + 6, gy + 20 - bubOff, 2, 2);
+    ctx.fillRect(gx + 10, gy + 18 - bubOff * 0.7, 2, 2);
+  }
+
+  // Floor
+  ctx.fillStyle = '#2a1a0a';
+  ctx.fillRect(0, canvas.height * 0.55 + 28, canvas.width, canvas.height);
+
+  // Characters at the bar!
+  const charBarY = canvas.height * 0.52 - 62;
+  drawTitleCharacter(canvas.width / 2 - 120, charBarY, 'brayden', 1.3);
+  drawTitleCharacter(canvas.width / 2 - 30, charBarY, 'kunal', 1.3);
+  drawTitleCharacter(canvas.width / 2 + 50, charBarY, 'lax', 1.3);
+  drawTitleCharacter(canvas.width / 2 + 130, charBarY, 'andrew', 1.3);
+
+  // Title
+  ctx.fillStyle = '#000'; ctx.font = 'bold 32px monospace';
+  ctx.fillText('YOU ENDED UP AT THE PUB!', canvas.width / 2 + 2, 82);
+  ctx.fillStyle = '#ff4444'; ctx.font = 'bold 32px monospace';
+  ctx.fillText('YOU ENDED UP AT THE PUB!', canvas.width / 2, 80);
+
+  // Game over reason (word-wrapped)
+  ctx.fillStyle = '#ffcc66'; ctx.font = '13px monospace';
+  const words = game.gameOverReason.split(' ');
+  let line = '', ly = 106;
+  for (const word of words) {
+    const test = line + word + ' ';
+    if (ctx.measureText(test).width > canvas.width - 140) {
+      ctx.fillText(line, canvas.width / 2, ly); line = word + ' '; ly += 18;
+    } else line = test;
+  }
+  ctx.fillText(line, canvas.width / 2, ly);
+
+  // Funny quips at bottom
+  const pubQuips = [
+    "Your bowels will remember this betrayal.",
+    "The toilet weeps alone tonight.",
+    "Andrew raises his glass: 'Told you so.'",
+    "Your colon is filing a formal complaint.",
+    "Somewhere, a toilet cubicle sits empty... waiting.",
+    "Achievement Unlocked: Pint Over Porcelain",
+    "Your arse: 'We had a DEAL, Brayden!'",
+    "The curry from last night sends its regards.",
+  ];
+  const qIdx = Math.floor(game.frameCount / 150) % pubQuips.length;
+  ctx.fillStyle = '#888'; ctx.font = 'italic 11px monospace';
+  ctx.fillText(pubQuips[qIdx], canvas.width / 2, canvas.height - 70);
+
+  // Stats
+  const timeUsed = game.maxTime - game.time;
+  const timeMin = Math.floor(timeUsed / 60);
+  const timeSec = Math.floor(timeUsed % 60);
+  ctx.fillStyle = '#666'; ctx.font = '10px monospace';
+  ctx.fillText(`Survived: ${timeMin}:${timeSec.toString().padStart(2, '0')}  |  Toilet Desperation: ${Math.floor(game.toiletMeter)}%  |  Pints: Too many`, canvas.width / 2, canvas.height - 50);
+
+  if (game.frameCount % 50 < 30) {
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px monospace';
+    ctx.fillText('PRESS SPACE TO TRY AGAIN', canvas.width / 2, canvas.height - 24);
+  }
+  ctx.textAlign = 'left';
+}
+
+// --- WIN SCREEN ---
+function drawWinScreen() {
+  // Heavenly bathroom glow
+  ctx.fillStyle = '#060e1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Angelic light rays from the toilet
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2 + game.frameCount * 0.005;
+    const rayLen = 180 + Math.sin(game.frameCount * 0.03 + i) * 30;
+    ctx.save();
+    ctx.translate(canvas.width / 2, 180);
+    ctx.rotate(angle);
+    ctx.fillStyle = `rgba(255, 215, 0, ${0.04 + Math.sin(game.frameCount * 0.05 + i) * 0.02})`;
+    ctx.beginPath();
+    ctx.moveTo(-8, 0); ctx.lineTo(-15, rayLen); ctx.lineTo(15, rayLen); ctx.lineTo(8, 0);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Confetti!
+  for (let i = 0; i < 40; i++) {
+    const cx = (Math.sin(game.frameCount * 0.015 + i * 2.1) * 0.5 + 0.5) * canvas.width;
+    const cy = (game.frameCount * 0.4 + i * 30) % (canvas.height + 20) - 10;
+    const colors = ['#ffd700', '#ff6b6b', '#4a9a4a', '#4a7abc', '#ff69b4', '#ff8c00'];
+    ctx.fillStyle = colors[i % colors.length];
+    const size = 2 + (i % 3);
+    ctx.fillRect(cx, cy, size, size);
+  }
+
+  // Glowing toilet (the holy grail)
+  const toiletX = canvas.width / 2 - 24, toiletY = 135;
+  // Glow
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 20 + Math.sin(game.frameCount * 0.05) * 8;
+  drawPixelRect(toiletX, toiletY, 48, 36, '#f0e8ff');
+  ctx.shadowBlur = 0;
+  drawPixelRect(toiletX + 4, toiletY + 4, 40, 22, '#d8c0f0');
+  drawPixelRect(toiletX + 12, toiletY - 8, 24, 12, '#f0e8ff');
+  drawPixelRect(toiletX + 16, toiletY - 6, 16, 8, '#d8c0f0');
+  drawPixelRect(toiletX + 8, toiletY + 28, 32, 10, '#e8e0f0');
+  // Sparkles
+  const sparkle = Math.sin(game.frameCount * 0.1) > 0;
+  if (sparkle) {
+    ctx.fillStyle = '#fff'; ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('*', toiletX - 8, toiletY + 5);
+    ctx.fillText('*', toiletX + 56, toiletY - 2);
+    ctx.fillText('*', toiletX + 24, toiletY - 18);
+  }
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#000'; ctx.font = 'bold 34px monospace';
+  ctx.fillText('SWEET RELIEF!', canvas.width / 2 + 2, 52);
+  ctx.fillStyle = '#4aff4a'; ctx.font = 'bold 34px monospace';
+  ctx.fillText('SWEET RELIEF!', canvas.width / 2, 50);
+
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px monospace';
+  ctx.fillText('MISSION ACCOMPLISHED', canvas.width / 2, 76);
+
+  // Brayden sitting triumphant (on the toilet)
+  drawTitleCharacter(canvas.width / 2 - 22, 195, 'brayden', 1.4);
+
+  // Funny win messages
+  ctx.fillStyle = '#ccc'; ctx.font = '13px monospace';
+  ctx.fillText('Against all odds, Brayden made it to the cubicle!', canvas.width / 2, 290);
+  ctx.fillText('The most heroic journey in office history is complete.', canvas.width / 2, 310);
+
+  const winQuips = [
+    '"The relief was... indescribable." - Brayden',
+    'Andrew is still outside the door muttering "Pub?"',
+    'Your colon thanks you for your service.',
+    'This dump will go down in office legend.',
+    'Kunal: "Is he... is he singing in there?"',
+    'Lax: *puts headphones on* "That\'s nasty bro"',
+    'HR has been notified. Worth it.',
+    'Achievement Unlocked: The Porcelain Throne',
+  ];
+  const wIdx = Math.floor(game.frameCount / 150) % winQuips.length;
+  ctx.fillStyle = '#888'; ctx.font = 'italic 11px monospace';
+  ctx.fillText(winQuips[wIdx], canvas.width / 2, 342);
+
+  // Stats
+  const timeUsed = game.maxTime - game.time;
+  const timeMin = Math.floor(timeUsed / 60);
+  const timeSec = Math.floor(timeUsed % 60);
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px monospace';
+  ctx.fillText(`Time: ${timeMin}:${timeSec.toString().padStart(2, '0')}  |  Desperation: ${Math.floor(game.toiletMeter)}%  |  Dignity: 0%`, canvas.width / 2, 390);
+
+  // Rating
+  const rating = game.toiletMeter > 90 ? 'PHOTO FINISH' : game.toiletMeter > 70 ? 'CLOSE CALL' : game.toiletMeter > 50 ? 'CUTTING IT FINE' : 'CASUAL STROLL';
+  ctx.fillStyle = game.toiletMeter > 90 ? '#ff4444' : game.toiletMeter > 70 ? '#ffaa44' : game.toiletMeter > 50 ? '#ffff44' : '#44ff44';
+  ctx.font = 'bold 14px monospace';
+  ctx.fillText(`Rating: ${rating}`, canvas.width / 2, 414);
+
+  if (game.frameCount % 50 < 30) {
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px monospace';
+    ctx.fillText('PRESS SPACE TO PLAY AGAIN', canvas.width / 2, 468);
+  }
+  ctx.textAlign = 'left';
+}
+
+
+
+function drawEffects() {
+  let effectY = 56;
+  if (player._coffeeBoost > 0) {
+    ctx.fillStyle = '#ffa500'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(`COFFEE BOOST: ${Math.ceil(player._coffeeBoost)}s`, 8, effectY); effectY += 14;
+  }
+  if (player._headphoneTimer > 0) {
+    ctx.fillStyle = '#66aaff'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(`INVISIBLE: ${Math.ceil(player._headphoneTimer)}s`, 8, effectY); effectY += 14;
+  }
+  if (game.energyDrinkWorkTimer > 0) {
+    ctx.fillStyle = '#2a8a2a'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(`WORK BOOST: ${Math.ceil(game.energyDrinkWorkTimer)}s`, 8, effectY); effectY += 14;
+  }
+  if (game.energyDrinkToiletTimer > 0) {
+    const flash = game.frameCount % 20 < 10;
+    ctx.fillStyle = flash ? '#ff4444' : '#cc3333'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(`TOILET RUSH: ${Math.ceil(game.energyDrinkToiletTimer)}s`, 8, effectY); effectY += 14;
+  }
+}
+
+// --- RANDOM EVENTS ---
+function updateRandomEvents(dt) {
+  if (game.currentRoom === 'office') return;
+  if (game.currentEvent) {
+    game.currentEvent.timer -= dt;
+    if (game.currentEvent.timer <= 0) game.currentEvent = null;
+    return;
+  }
+  game.randomEventTimer -= dt;
+  if (game.randomEventTimer <= 0) {
+    game.randomEventTimer = 25 + Math.random() * 20;
+    const roll = Math.random();
+    if (roll < 0.15) triggerFireDrill();
+    else if (roll < 0.25) triggerPhoneRing();
+  }
+}
+
+function triggerFireDrill() {
+  game.currentEvent = { type: 'fireDrill', timer: 10 };
+}
+
+function triggerPhoneRing() {
+  game.currentEvent = { type: 'phoneRing', timer: 8 };
+  game.state = 'interact';
+  game.dialogueQueue = [
+    "*RING RING* Your phone is going off...",
+    "Unknown: Hi, I'm calling about your car's extended warranty...",
+    "*You just lost 15 seconds listening to that!*"
+  ];
+  game.currentDialogue = game.dialogueQueue.shift();
+  game.time -= 15;
+}
+
+function drawEventOverlay() {
+  if (!game.currentEvent) return;
+  if (game.currentEvent.type === 'fireDrill') {
+    const flash = game.frameCount % 30 < 15;
+    ctx.fillStyle = flash ? 'rgba(255, 0, 0, 0.15)' : 'rgba(0, 0, 0, 0)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff4444'; ctx.font = 'bold 16px monospace';
+    ctx.fillText('FIRE DRILL - EVERYONE EVACUATE', canvas.width/2, 70);
+    ctx.fillStyle = '#ffa'; ctx.font = '11px monospace';
+    ctx.fillText(`${Math.ceil(game.currentEvent.timer)}s remaining - enemies confused!`, canvas.width/2, 88);
+    ctx.textAlign = 'left';
+  }
+}
+
+// --- EMAIL NOTIFICATIONS ---
+function updateEmailNotifications(dt) {
+  if (game.currentRoom === 'office') return;
+  game.emailTimer -= dt;
+  if (game.emailTimer <= 0) {
+    game.emailTimer = 15 + Math.random() * 20;
+    const emails = [
+      'RE: RE: RE: RE: Lunch??',
+      'From HR: Mandatory Fun Day Tomorrow',
+      'URGENT: Who left milk in the microwave?!',
+      'From Boss: Where are the TPS reports?',
+      'Slack: Andrew posted in #pub-plans',
+      'From Kunal: tabs > spaces. Fight me.',
+      'Teams: You missed 3 meetings today',
+      'From Greg: FW: FW: FW: FW: Funny joke',
+      'Calendar: Performance Review in 5 min',
+      'IT: Your password expires in 0 days',
+    ];
+    game.emailNotifications.push({
+      text: emails[Math.floor(Math.random() * emails.length)],
+      timer: 4
+    });
+  }
+  for (let i = game.emailNotifications.length - 1; i >= 0; i--) {
+    game.emailNotifications[i].timer -= dt;
+    if (game.emailNotifications[i].timer <= 0) game.emailNotifications.splice(i, 1);
+  }
+}
+
+function drawEmailNotifications() {
+  for (let i = 0; i < game.emailNotifications.length; i++) {
+    const email = game.emailNotifications[i];
+    const alpha = Math.min(1, email.timer / 0.5);
+    const ey = 58 + i * 28;
+    ctx.globalAlpha = alpha;
+    drawPixelRect(canvas.width - 260, ey, 252, 24, 'rgba(30, 40, 60, 0.9)');
+    ctx.strokeStyle = '#4a6a9a'; ctx.lineWidth = 1;
+    ctx.strokeRect(canvas.width - 260, ey, 252, 24);
+    ctx.fillStyle = '#88aadd'; ctx.font = 'bold 9px monospace';
+    ctx.fillText('EMAIL', canvas.width - 254, ey + 10);
+    ctx.fillStyle = '#ccc'; ctx.font = '9px monospace';
+    ctx.fillText(email.text, canvas.width - 220, ey + 10);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// --- SPEECH BUBBLES / QUIPS ---
+function updateQuips(dt) {
+  game.quipTimer -= dt;
+  if (game.quipTimer <= 0) {
+    game.quipTimer = 2.5 + Math.random() * 3; // every 2.5-5.5 seconds
+    // Brayden quip (always)
+    if (Math.random() < 0.5) {
+      const q = QUIPS.brayden[Math.floor(Math.random() * QUIPS.brayden.length)];
+      game.speechBubbles.push({ text: q, x: player.x, y: player.y - 20, timer: 2.2, color: '#ffdd44', follow: 'player' });
+    }
+    // NPC quips
+    const room = rooms[game.currentRoom];
+    if (room.npcs) {
+      for (const npc of room.npcs) {
+        if (Math.random() < 0.3) {
+          const key = npc.name.toLowerCase();
+          const quipList = QUIPS[key];
+          if (quipList) {
+            const q = quipList[Math.floor(Math.random() * quipList.length)];
+            game.speechBubbles.push({ text: q, x: npc.x, y: npc.y - 20, timer: 2, color: '#fff', followNpc: npc });
+          }
+        }
+      }
+    }
+    // Andrew quips from enemies
+    if (room.enemies) {
+      for (const e of room.enemies) {
+        if (e.dead) continue;
+        if (e.type === 'zombie' && Math.random() < 0.4) {
+          let quipList = QUIPS.andrew.far;
+          const dist = Math.hypot(player.x - e.x, player.y - e.y);
+          if (dist < T * 3) quipList = QUIPS.andrew.close;
+          else if (dist < T * 6) quipList = QUIPS.andrew.medium;
+          const q = quipList[Math.floor(Math.random() * quipList.length)];
+          game.speechBubbles.push({ text: q, x: e.x, y: e.y - 20, timer: 2, color: '#aaa', followEnemy: e });
+        }
+      }
+    }
+  }
+  // Update existing bubbles
+  for (let i = game.speechBubbles.length - 1; i >= 0; i--) {
+    const b = game.speechBubbles[i];
+    b.timer -= dt;
+    if (b.follow === 'player') { b.x = player.x; b.y = player.y - 20; }
+    if (b.followNpc) { b.x = b.followNpc.x; b.y = b.followNpc.y - 20; }
+    if (b.followEnemy) { b.x = b.followEnemy.x; b.y = b.followEnemy.y - 20; }
+    if (b.timer <= 0) game.speechBubbles.splice(i, 1);
+  }
+}
+
+function drawRoundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function drawSpeechBubbles() {
+  for (const b of game.speechBubbles) {
+    const alpha = Math.min(1, b.timer / 0.5); // fade out
+    const bx = b.x, by = b.y - (2 - b.timer) * 8; // float upward
+    ctx.globalAlpha = alpha;
+    ctx.font = 'bold 9px monospace';
+    const textW = ctx.measureText(b.text).width;
+    const padX = 6, padY = 4;
+    const bubbleW = textW + padX * 2, bubbleH = 14 + padY * 2;
+    const bxC = bx - bubbleW / 2 + 15;
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    drawRoundRect(bxC, by - bubbleH, bubbleW, bubbleH, 4);
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 1;
+    drawRoundRect(bxC, by - bubbleH, bubbleW, bubbleH, 4);
+    ctx.stroke();
+    // Tail
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.beginPath();
+    ctx.moveTo(bx + 10, by);
+    ctx.lineTo(bx + 15, by + 6);
+    ctx.lineTo(bx + 20, by);
+    ctx.fill();
+    // Text
+    ctx.fillStyle = b.color;
+    ctx.fillText(b.text, bxC + padX, by - padY - 3);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// --- INTERACTION HINTS ---
+function drawInteractionHints() {
+  if (!player.canInteract) return;
+  const { type, data } = player.canInteract;
+
+  if (type === 'fridge') {
+    const fx = 1 * T, fy = 6 * T;
+    const pulse = Math.sin(game.frameCount * 0.1) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('[E] Open Fridge', fx - 10, fy - 8);
+  }
+
+  if (type === 'computer') {
+    ctx.fillStyle = 'rgba(100, 200, 255, 0.8)';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('[Hold E] Work', player.x - 12, player.y - 8);
+  }
+
+  if (type === 'door') {
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`[E] ${data.label}`, data.x * T + T/2, data.y * T - 8);
+    ctx.textAlign = 'left';
+  }
+
+  if (type === 'lockedDoor') {
+    ctx.fillStyle = 'rgba(255, 80, 80, 0.9)';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    const pct = Math.floor(game.workMeter);
+    ctx.fillText(`LOCKED (${pct}/${game.workThreshold}%)`, data.x * T + T/2, data.y * T - 8);
+    ctx.textAlign = 'left';
+  }
+}
+
+// --- WORK OVERLAY ---
+function drawWorkOverlay() {
+  const W = canvas.width, H = canvas.height;
+  const pct = Math.floor(game.workMeter);
+  const needed = game.workThreshold;
+  const ratio = game.workMeter / game.maxWork;
+
+  // Dark overlay
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Central work panel
+  const panelW = 380, panelH = 140;
+  const px = W / 2 - panelW / 2, py = H / 2 - panelH / 2 - 20;
+  drawPixelRect(px, py, panelW, panelH, 'rgba(0, 20, 40, 0.9)');
+  ctx.strokeStyle = '#4a6a9a'; ctx.lineWidth = 2;
+  ctx.strokeRect(px, py, panelW, panelH);
+  ctx.lineWidth = 1;
+
+  ctx.textAlign = 'center';
+
+  // "WORKING..." title with animated dots
+  const dots = '.'.repeat((Math.floor(game.frameCount / 20) % 3) + 1);
+  ctx.fillStyle = '#6ab4ff'; ctx.font = 'bold 18px monospace';
+  ctx.fillText('WORKING' + dots, W / 2, py + 26);
+
+  // Progress bar
+  const barX = px + 30, barY = py + 40, barW = panelW - 60, barH = 18;
+  drawPixelRect(barX, barY, barW, barH, '#1a2a3a');
+  ctx.strokeStyle = '#3a5a7a'; ctx.strokeRect(barX, barY, barW, barH);
+  const fillW = barW * ratio;
+  const barColor = ratio >= (needed / game.maxWork) ? '#4a9a4a' : '#4a6a9a';
+  drawPixelRect(barX + 1, barY + 1, fillW - 2, barH - 2, barColor);
+  // Percentage text on bar
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px monospace';
+  ctx.fillText(`${pct}% / ${needed}%`, W / 2, barY + 14);
+
+  // Funny task text
+  ctx.fillStyle = '#aaccee'; ctx.font = '11px monospace';
+  ctx.fillText(game.workTask, W / 2, py + 82);
+
+  // Animated typing indicator
+  const typeDots = '|/-\\';
+  const typeChar = typeDots[Math.floor(game.frameCount / 8) % typeDots.length];
+  ctx.fillStyle = '#6ab4ff'; ctx.font = '13px monospace';
+  ctx.fillText(typeChar, W / 2 + ctx.measureText(game.workTask).width / 2 + 10, py + 82);
+
+  // Bottom hint
+  ctx.fillStyle = '#666'; ctx.font = '10px monospace';
+  ctx.fillText('Release [E] to stop working', W / 2, py + 106);
+
+  // Brayden quip below panel (intermittent)
+  if (Math.sin(game.frameCount * 0.03) > 0.5) {
+    const workQuips = [
+      '"I could be on the toilet right now..."',
+      '"My bowels are NOT happy about this."',
+      '"Type faster... CLENCH harder..."',
+      '"The things I do for a locked door."',
+      '"Is this what productivity looks like?"',
+      '"Spreadsheets now, toilet later..."',
+    ];
+    const qi = Math.floor(game.frameCount / 150) % workQuips.length;
+    ctx.fillStyle = '#ffd700'; ctx.font = 'italic 10px monospace';
+    ctx.fillText(workQuips[qi], W / 2, py + panelH + 20);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+// --- MAIN LOOP ---
+
+
+let lastTime = 0;
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+  game.frameCount++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (const k in justPressed) delete justPressed[k];
+
+  switch (game.state) {
+    case 'title':
+      drawTitle();
+      break;
+
+    case 'playing':
+    case 'interact':
+    case 'fridgeMenu':
+    case 'npcMenu':
+    case 'vendorMenu':
+      if (game.state === 'playing') {
+        updatePlayer(dt);
+        updateEnemies(dt);
+        updateNpcMovement(dt);
+        updateSaltProjectiles(dt);
+        updatePaperBalls(dt);
+        updateTimers(dt);
+        updateQuips(dt);
+        updateRandomEvents(dt);
+        updateEmailNotifications(dt);
+      }
+      drawRoom();
+
+      const room = rooms[game.currentRoom];
+      if (room.items) room.items.forEach(drawItem);
+      if (room.enemies) room.enemies.forEach(drawEnemy);
+      if (room.npcs) room.npcs.forEach(drawNPC);
+      drawSaltProjectiles();
+      drawPaperBalls();
+      drawPlayer();
+      drawUI();
+      drawEffects();
+      drawInteractionHints();
+      drawSpeechBubbles();
+      drawEventOverlay();
+      drawEmailNotifications();
+      if (game.isWorking) drawWorkOverlay();
+
+      if (game.state === 'interact') drawDialogue();
+      if (game.state === 'fridgeMenu') drawFridgeMenu();
+      if (game.state === 'npcMenu') drawNpcMenu();
+      if (game.state === 'vendorMenu') drawVendorMenu();
+      break;
+
+    case 'pub':
+      drawPubScreen();
+      break;
+
+    case 'win':
+      drawWinScreen();
+      break;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>

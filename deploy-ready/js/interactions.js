@@ -117,76 +117,6 @@ function tryInteract() {
       }
       return;
     }
-
-    // Free roam quest givers
-    if (data.interactType === 'karin_quest' || data.interactType === 'rebecca_quest') {
-      const giverName = data.interactType === 'karin_quest' ? 'Karin' : 'Rebecca';
-      // Check if player has a quest item to turn in
-      const turnInQuest = game.quests.find(q => !q.completed && q.giver === giverName &&
-        player.inventory.some(inv => inv && inv.itemType === q.itemNeeded));
-      if (turnInQuest) {
-        // Turn in quest
-        const invIdx = player.inventory.findIndex(inv => inv && inv.itemType === turnInQuest.itemNeeded);
-        player.inventory[invIdx] = null;
-        turnInQuest.completed = true;
-        game.gold += turnInQuest.reward;
-        game.state = 'interact';
-        game.dialogueQueue = [
-          giverName + ": Oh perfect, you found it! Thank you so much!",
-          "*Quest Complete: " + turnInQuest.name + "!*",
-          "*Reward: +" + turnInQuest.reward + " Work Points! (Total: " + game.gold + ")*",
-        ];
-        game.currentDialogue = game.dialogueQueue.shift();
-        return;
-      }
-      // Offer available quests
-      const available = game.quests.filter(q => !q.completed && q.giver === giverName);
-      if (available.length > 0) {
-        game.state = 'npcMenu';
-        game.npcMenuTarget = data;
-        game.npcMenuIndex = 0;
-        game.npcMenuOptions = available.map(q => ({
-          label: q.name, desc: q.description + ' (' + q.rewardDesc + ')', action: 'accept_quest_' + q.id
-        }));
-        game.npcMenuOptions.push({ label: 'Never mind', desc: 'Leave', action: 'cancel' });
-        return;
-      } else {
-        game.state = 'interact';
-        game.dialogueQueue = [];
-        game.currentDialogue = giverName + ": Thanks for all the help! I've got nothing else right now.";
-        return;
-      }
-    }
-
-    // Kunal vendor
-    if (data.interactType === 'kunal_vendor') {
-      game.state = 'vendorMenu';
-      game.vendorMenuIndex = 0;
-      game.vendorItems = [
-        { name: 'Coffee', itemType: 'coffee', cost: 10, desc: 'Speed boost for 8 seconds' },
-        { name: 'Energy Drink', itemType: 'energy_drink', cost: 15, desc: 'Reduce toilet meter by 30' },
-        { name: 'Headphones', itemType: 'headphones', cost: 12, desc: 'Ignore phone rings for 6 seconds' },
-        { name: 'Imodium', itemType: 'imodium', cost: 20, desc: 'Slow toilet urgency for 20 seconds' },
-        { name: 'Paper Balls x5', itemType: 'paper_balls', cost: 8, desc: 'Distraction ammo' },
-        { name: 'Air Freshener', itemType: 'air_freshener', cost: 10, desc: 'Enemy repellent' },
-      ];
-      return;
-    }
-
-    // Andrew in pub
-    if (data.interactType === 'andrew_pub') {
-      game.state = 'interact';
-      game.dialogueQueue = ["Andrew: *holding 3 pints* PUB! This is the life!", "Andrew: Want one? Go on... just one pint...", "Brayden: I'm working Andrew! ...sort of."];
-      game.currentDialogue = game.dialogueQueue.shift();
-      return;
-    }
-    if (data.interactType === 'lax_pub') {
-      game.state = 'interact';
-      game.dialogueQueue = ["Lax: *nursing a beer* Bro... you made it.", "Lax: Pull up a stool. Relax.", "Brayden: I should probably get back to work...", "Lax: Work can wait. Life is short bro."];
-      game.currentDialogue = game.dialogueQueue.shift();
-      return;
-    }
-
     game.state = 'interact';
     game.dialogueQueue = [...data.dialogue];
     game.currentDialogue = game.dialogueQueue.shift();
@@ -248,27 +178,6 @@ function advanceDialogue() {
 function handleNpcMenuSelect() {
   if (game.npcMenuOptions.length === 0) return;
   const option = game.npcMenuOptions[game.npcMenuIndex];
-
-  if (option.action === 'cancel') {
-    game.state = 'playing';
-    return;
-  }
-
-  if (option.action.startsWith('accept_quest_')) {
-    const questId = option.action.replace('accept_quest_', '');
-    const quest = game.quests.find(q => q.id === questId);
-    if (quest) {
-      game.activeQuest = quest;
-      game.state = 'interact';
-      game.dialogueQueue = [
-        quest.giver + ": " + quest.description,
-        "*New Quest: " + quest.name + "*",
-        "*Find: " + quest.itemNeeded.replace(/_/g, ' ') + "*",
-      ];
-      game.currentDialogue = game.dialogueQueue.shift();
-    }
-    return;
-  }
 
   if (option.action === 'pub') {
     game.state = 'pub';

@@ -16,7 +16,6 @@ function gameLoop(timestamp) {
     case 'interact':
     case 'fridgeMenu':
     case 'npcMenu':
-    case 'vendorMenu':
       if (game.state === 'playing') {
         updatePlayer(dt);
         updateEnemies(dt);
@@ -48,7 +47,6 @@ function gameLoop(timestamp) {
       if (game.state === 'interact') drawDialogue();
       if (game.state === 'fridgeMenu') drawFridgeMenu();
       if (game.state === 'npcMenu') drawNpcMenu();
-      if (game.state === 'vendorMenu') drawVendorMenu();
       break;
 
     case 'pub':

@@ -19,7 +19,7 @@ function startGame() {
   const start = rooms.office.playerStart;
   player.x = start.x; player.y = start.y;
   player.stamina = player.maxStamina;
-  player.inventory = game.level === 3 ? [null, null, null, null] : [null, null];
+  player.inventory = [null, null];
   player._coffeeBoost = 0;
   player._headphoneTimer = 0;
   player.isHiding = false;
@@ -70,70 +70,10 @@ function startGame() {
     rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletArea', toX: 7, toY: 9, label: 'To the Toilets!' };
     // toiletArea back door goes to lobby
     rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'lobby', toX: 13, toY: 1, label: 'Back to Communal Area' };
-  } else if (game.level === 2) {
+  } else {
     // Level 2: Office → Lobby → Toilet Hall → Stairwell → Toilet Area (5 rooms)
     rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletHall', toX: 7, toY: 10, label: 'Toilet Hallway' };
     rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Back to Stairwell' };
-  } else if (game.level === 3) {
-    game.mode = 'freeroam';
-    game.time = 9999; // no time pressure
-    game.toiletRiseRate = 0; // no toilet urgency
-    game.maxTime = 9999;
-    game.officeDoorUnlocked = true; // doors always open
-    game.gold = 0;
-
-    // Set up door routing - lobby connects to pub via exit
-    rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletHall', toX: 7, toY: 10, label: 'Toilet Hallway' };
-    rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Back to Stairwell' };
-
-    // toiletHall exit door leads to pub instead of game over
-    rooms.toiletHall.doors[2] = { x: 12, y: 10, toRoom: 'pub', toX: 7, toY: 9, label: 'Go to the Pub' };
-
-    // Remove sleeping behavior from all Kunals - he's a vendor in free roam
-    for (const roomKey in rooms) {
-      const r = rooms[roomKey];
-      if (r.npcs) r.npcs.forEach(n => {
-        if (n.sleeping) n.sleeping = false;
-      });
-    }
-
-    // Set up quests
-    game.quests = [
-      { id: 'coffee_run', name: "Karin's Coffee Run", description: 'Find Coffee and bring it to Karin', itemNeeded: 'coffee', giver: 'Karin', completed: false, reward: 20, rewardDesc: '+20 Work Points' },
-      { id: 'lost_headphones', name: "Rebecca's Headphones", description: 'Find Headphones and return them to Rebecca', itemNeeded: 'headphones', giver: 'Rebecca', completed: false, reward: 25, rewardDesc: '+25 Work Points' },
-      { id: 'pub_snacks', name: "Karin's Pub Snacks", description: 'Get Pub Snacks from the pub for Karin', itemNeeded: 'pub_snacks', giver: 'Karin', completed: false, reward: 30, rewardDesc: '+30 Work Points' },
-      { id: 'beer_mat', name: "Rebecca's Collection", description: 'Find the rare Beer Mat in the pub', itemNeeded: 'beer_mat', giver: 'Rebecca', completed: false, reward: 20, rewardDesc: '+20 Work Points' },
-      { id: 'imodium_quest', name: "Karin's Emergency", description: 'Find Imodium for Karin (she ate the curry too)', itemNeeded: 'imodium', giver: 'Karin', completed: false, reward: 35, rewardDesc: '+35 Work Points' },
-      { id: 'dart_quest', name: "Rebecca's Darts Night", description: 'Get a Dart from the pub for tonight', itemNeeded: 'dart', giver: 'Rebecca', completed: false, reward: 15, rewardDesc: '+15 Work Points' },
-    ];
-    game.activeQuest = null;
-
-    // Add Karin and Rebecca NPCs to office
-    rooms.office.npcs.push(
-      { x: 1 * T, y: 3 * T, name: 'Karin', type: 'coworker', interactType: 'karin_quest',
-        roaming: false, originX: 1 * T, originY: 3 * T, sprite: 'karin',
-        dialogue: ["Karin: Hey Brayden! I've got some tasks for you if you're bored..."] },
-      { x: 1 * T, y: 7 * T, name: 'Rebecca', type: 'coworker', interactType: 'rebecca_quest',
-        roaming: false, originX: 1 * T, originY: 7 * T, sprite: 'rebecca',
-        dialogue: ["Rebecca: Oh Brayden, perfect timing! I need a favour..."] }
-    );
-
-    // Change office Kunal to vendor
-    rooms.office.npcs.forEach(n => {
-      if (n.name === 'Kunal') {
-        n.interactType = 'kunal_vendor';
-        n.dialogue = ["Kunal: Yo! Want to buy something? I accept work progress as payment."];
-      }
-    });
-
-    // Add more items scattered around rooms for free roam
-    rooms.lobby.items.push(
-      { x: 7 * T, y: 2 * T, name: 'Biscuits', type: 'pickup', itemType: 'biscuits', collected: false },
-      { x: 14 * T, y: 8 * T, name: 'Stapler', type: 'pickup', itemType: 'stapler', collected: false }
-    );
-    rooms.toiletHall.items.push(
-      { x: 8 * T, y: 8 * T, name: 'Toilet Roll', type: 'pickup', itemType: 'toilet_roll', collected: false }
-    );
   }
 }
 
@@ -477,16 +417,8 @@ function updateEnemies(dt) {
       }
 
       if (playerDist < T * 0.7) {
-        if (game.mode === 'freeroam') {
-          game.currentRoom = 'pub';
-          player.x = 7 * T; player.y = 9 * T;
-          game.state = 'interact';
-          game.dialogueQueue = ["Andrew dragged you to the pub! 'Just one pint!'", "*You're now at the pub. Find the door to get back!*"];
-          game.currentDialogue = game.dialogueQueue.shift();
-        } else {
-          game.state = 'pub';
-          game.gameOverReason = enemy.caught;
-        }
+        game.state = 'pub';
+        game.gameOverReason = enemy.caught;
       }
       continue;
     }
@@ -754,46 +686,4 @@ function fireSalt() {
     dx, dy,
     life: 1.5,
   });
-}
-
-function handleVendorBuy() {
-  if (game.vendorItems.length === 0) return;
-  const item = game.vendorItems[game.vendorMenuIndex];
-
-  // Special handling for paper balls
-  if (item.itemType === 'paper_balls') {
-    if (game.gold >= item.cost) {
-      game.gold -= item.cost;
-      game.paperBallAmmo = (game.paperBallAmmo || 0) + 5;
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Kunal: Here's 5 paper balls. Go cause some chaos!";
-      return;
-    } else {
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
-      return;
-    }
-  }
-
-  if (game.gold >= item.cost) {
-    game.gold -= item.cost;
-    // Give player the item
-    const emptySlot = player.inventory.indexOf(null);
-    if (emptySlot !== -1) {
-      player.inventory[emptySlot] = { name: item.name, itemType: item.itemType, type: 'pickup' };
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Kunal: Nice doing business! Here's your " + item.name + ".";
-    } else {
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Your pockets are full! Use or drop an item first.";
-    }
-  } else {
-    game.state = 'interact';
-    game.dialogueQueue = [];
-    game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
-  }
 }

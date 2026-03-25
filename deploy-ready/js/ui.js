@@ -74,28 +74,6 @@ function drawUI() {
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = '9px monospace';
   ctx.fillText('WASD:Move  SHIFT:Sneak  E:Interact  1/2:Use Item  SPACE:Salt', 8, canvas.height - 6);
-
-  // Free roam quest tracker
-  if (game.mode === 'freeroam') {
-    // Gold display
-    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 11px monospace';
-    ctx.fillText('Work Points: ' + game.gold, canvas.width - 150, 20);
-
-    // Active quest
-    if (game.activeQuest && !game.activeQuest.completed) {
-      const q = game.activeQuest;
-      drawPixelRect(canvas.width - 220, 30, 210, 40, 'rgba(0,0,0,0.7)');
-      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px monospace';
-      ctx.fillText('QUEST: ' + q.name, canvas.width - 214, 44);
-      ctx.fillStyle = '#ccc'; ctx.font = '9px monospace';
-      ctx.fillText('Find: ' + q.itemNeeded.replace(/_/g, ' '), canvas.width - 214, 58);
-    }
-
-    // Quest completion count
-    const done = game.quests.filter(q => q.completed).length;
-    ctx.fillStyle = '#aaa'; ctx.font = '9px monospace';
-    ctx.fillText('Quests: ' + done + '/' + game.quests.length, canvas.width - 150, canvas.height - 10);
-  }
 }
 
 // --- FRIDGE MENU ---
@@ -180,44 +158,6 @@ function drawNpcMenu() {
     ctx.fillText(opt.desc, canvas.width/2, yPos + 30);
   }
 
-  ctx.textAlign = 'left';
-}
-
-// --- VENDOR MENU ---
-function drawVendorMenu() {
-  const mx = 100, my = 80, mw = canvas.width - 200, mh = 380;
-  drawPixelRect(mx, my, mw, mh, 'rgba(0, 0, 0, 0.92)');
-  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2;
-  ctx.strokeRect(mx, my, mw, mh);
-  ctx.lineWidth = 1;
-
-  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText("KUNAL'S SHOP", canvas.width / 2, my + 24);
-  ctx.fillStyle = '#aaa'; ctx.font = '11px monospace';
-  ctx.fillText('Work Points: ' + game.gold, canvas.width / 2, my + 42);
-  ctx.textAlign = 'left';
-
-  const items = game.vendorItems;
-  for (let i = 0; i < items.length; i++) {
-    const iy = my + 60 + i * 44;
-    const selected = i === game.vendorMenuIndex;
-    if (selected) {
-      drawPixelRect(mx + 10, iy - 4, mw - 20, 40, 'rgba(255, 215, 0, 0.12)');
-      ctx.strokeStyle = '#ffd700';
-      ctx.strokeRect(mx + 10, iy - 4, mw - 20, 40);
-    }
-    const canAfford = game.gold >= items[i].cost;
-    ctx.fillStyle = selected ? '#fff' : '#aaa'; ctx.font = 'bold 13px monospace';
-    ctx.fillText((selected ? '> ' : '  ') + items[i].name, mx + 20, iy + 12);
-    ctx.fillStyle = canAfford ? '#4a9a4a' : '#aa4444'; ctx.font = '11px monospace';
-    ctx.fillText('Cost: ' + items[i].cost + ' pts', mx + 240, iy + 12);
-    ctx.fillStyle = '#888'; ctx.font = '10px monospace';
-    ctx.fillText(items[i].desc, mx + 20, iy + 28);
-  }
-
-  ctx.fillStyle = '#666'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('[W/S] Browse  |  [E/Enter] Buy  |  [ESC] Close', canvas.width / 2, my + mh - 12);
   ctx.textAlign = 'left';
 }
 

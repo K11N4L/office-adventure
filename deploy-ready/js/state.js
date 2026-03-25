@@ -3,7 +3,7 @@ const game = {
   state: 'title',
   currentRoom: 'office',
   level: 1,
-  levelSelectIndex: 0, // 0 = Level 1, 1 = Level 2, 2 = Free Roam
+  levelSelectIndex: 0, // 0 = Level 1, 1 = Level 2
   time: 600,
   maxTime: 600,
   workMeter: 0,
@@ -47,15 +47,6 @@ const game = {
   deliveryDriverMoved: false,
   // Occupied cubicle
   occupiedCubicle: -1, // index of occupied winTile, -1 = none
-  // Free roam mode
-  mode: 'normal', // 'normal' or 'freeroam'
-  quests: [], // [{id, name, description, itemNeeded, giver, completed, reward, rewardDesc}]
-  activeQuest: null,
-  questLog: [],
-  gold: 0, // work progress currency for vendor
-  // Vendor
-  vendorItems: [],
-  vendorMenuIndex: 0,
 };
 
 // --- RANDOM QUIPS ---
@@ -115,15 +106,11 @@ window.addEventListener('keydown', e => {
 
   if (st === 'title') {
     if (e.code === 'ArrowUp' || e.code === 'KeyW') {
-      game.levelSelectIndex = (game.levelSelectIndex - 1 + 3) % 3;
+      game.levelSelectIndex = (game.levelSelectIndex - 1 + 2) % 2;
     } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-      game.levelSelectIndex = (game.levelSelectIndex + 1) % 3;
+      game.levelSelectIndex = (game.levelSelectIndex + 1) % 2;
     } else if (e.code === 'Space' || e.code === 'Enter') {
-      if (game.levelSelectIndex === 2) {
-        game.level = 3;
-      } else {
-        game.level = game.levelSelectIndex + 1;
-      }
+      game.level = game.levelSelectIndex + 1;
       startGame();
     }
   } else if (st === 'playing') {
@@ -157,19 +144,6 @@ window.addEventListener('keydown', e => {
     }
     if (e.code === 'Enter' || e.code === 'KeyE') {
       handleNpcMenuSelect();
-    }
-    if (e.code === 'Escape') {
-      game.state = 'playing';
-    }
-  } else if (st === 'vendorMenu') {
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
-      game.vendorMenuIndex = (game.vendorMenuIndex - 1 + game.vendorItems.length) % game.vendorItems.length;
-    }
-    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-      game.vendorMenuIndex = (game.vendorMenuIndex + 1) % game.vendorItems.length;
-    }
-    if (e.code === 'Enter' || e.code === 'KeyE') {
-      handleVendorBuy();
     }
     if (e.code === 'Escape') {
       game.state = 'playing';

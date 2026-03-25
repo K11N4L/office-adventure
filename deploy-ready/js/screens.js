@@ -386,26 +386,25 @@ function drawTitle() {
   const levels = [
     { name: 'LEVEL 1 - Quick Dash', desc: '3 rooms  |  Get to the toilet ASAP!' },
     { name: 'LEVEL 2 - The Gauntlet', desc: '5 rooms  |  Stealth, items & more chaos' },
-    { name: 'FREE ROAM - Open World', desc: 'Explore, quests, pub visits & trade!' },
   ];
   const selY = H - 140;
   ctx.fillStyle = '#ddd'; ctx.font = 'bold 14px monospace';
   ctx.fillText('SELECT LEVEL', cx, selY + 12);
 
   for (let i = 0; i < levels.length; i++) {
-    const ly = selY + 24 + i * 26;
+    const ly = selY + 24 + i * 30;
     const selected = game.levelSelectIndex === i;
     if (selected) {
-      drawPixelRect(cx - 200, ly - 10, 400, 24, 'rgba(255, 215, 0, 0.15)');
+      drawPixelRect(cx - 200, ly - 10, 400, 26, 'rgba(255, 215, 0, 0.15)');
       ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1;
-      ctx.strokeRect(cx - 200, ly - 10, 400, 24);
+      ctx.strokeRect(cx - 200, ly - 10, 400, 26);
       ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px monospace';
-      ctx.fillText('> ' + levels[i].name + ' <', cx, ly + 4);
+      ctx.fillText('> ' + levels[i].name + ' <', cx, ly + 5);
       ctx.fillStyle = '#ccc'; ctx.font = '10px monospace';
-      ctx.fillText(levels[i].desc, cx, ly + 15);
+      ctx.fillText(levels[i].desc, cx, ly + 16);
     } else {
       ctx.fillStyle = '#888'; ctx.font = '13px monospace';
-      ctx.fillText(levels[i].name, cx, ly + 4);
+      ctx.fillText(levels[i].name, cx, ly + 5);
     }
   }
 
