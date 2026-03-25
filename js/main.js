@@ -15,7 +15,10 @@ function gameLoop(timestamp) {
     case 'fridgeMenu':
     case 'npcMenu':
     case 'vendorMenu':
+    case 'dialogueChoice':
+    case 'questLog':
       if (game.state === 'playing') {
+        updateRoomTransition(dt);
         updatePlayer(dt);
         updateEnemies(dt);
         updateNpcMovement(dt);
@@ -42,10 +45,13 @@ function gameLoop(timestamp) {
       drawEmailNotifications();
       if (game.isWorking) drawWorkOverlay();
       if (game.state === 'interact') drawDialogue();
+      if (game.state === 'dialogueChoice') drawDialogueChoice();
       if (game.state === 'fridgeMenu') drawFridgeMenu();
       if (game.state === 'npcMenu') drawNpcMenu();
       if (game.state === 'vendorMenu') drawVendorMenu();
+      if (game.state === 'questLog') drawQuestLog();
       if (game.state === 'paused') drawPauseMenu();
+      drawRoomTransition();
       break;
     case 'pub':
       drawPubScreen();

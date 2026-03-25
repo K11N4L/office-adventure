@@ -43,6 +43,14 @@ function startGame() {
       e.distracted = false; e.distractTimer = 0;
       e.hp = e.maxHp; e.dead = false;
       if (e.startX !== undefined) { e.x = e.startX; e.y = e.startY; }
+      // Initialize alert state for zombies
+      if (e.type === 'zombie') {
+        e.alertState = 'idle';
+        e.lastSeenX = 0;
+        e.lastSeenY = 0;
+        e.searchTimer = 0;
+        e.roamTarget = null;
+      }
     });
     if (r.npcs) r.npcs.forEach(n => {
       if (n.originX !== undefined) {
@@ -74,7 +82,26 @@ function startGame() {
     // Level 2: Office → Lobby → Toilet Hall → Stairwell → Toilet Area (5 rooms)
     rooms.lobby.doors[1] = { x: 13, y: 0, toRoom: 'toiletHall', toX: 7, toY: 10, label: 'Toilet Hallway' };
     rooms.toiletArea.doors[0] = { x: 7, y: 9, toRoom: 'stairwell', toX: 7, toY: 9, label: 'Back to Stairwell' };
-  } else if (game.level === 3) {
+    // Level 2 quests
+    game.quests = [
+      { id: 'find_imodium', name: 'Emergency Supplies', description: 'Find Imodium to slow your urgency',
+        itemNeeded: 'imodium', giver: 'Survival', completed: false, reward: 0,
+        rewardDesc: 'Slows toilet meter' }
+    ];
+    game.activeQuest = null;
+  }
+
+  // Add quests for Level 1
+  if (game.level === 1) {
+    game.quests = [
+      { id: 'quick_coffee', name: 'Coffee Emergency', description: 'Find the coffee near the lobby',
+        itemNeeded: 'coffee', giver: 'Survival', completed: false, reward: 0,
+        rewardDesc: 'Speed boost for 5s' }
+    ];
+    game.activeQuest = null;
+  }
+
+  if (game.level === 3) {
     game.mode = 'freeroam';
     game.time = 9999; // no time pressure
     game.toiletRiseRate = 0; // no toilet urgency
@@ -262,6 +289,9 @@ function drawPaperBalls() {
 function updatePlayer(dt) {
   if (game.state !== 'playing') return;
 
+  // Block movement during room transitions
+  if (game.roomTransition) return;
+
   if (keys['e'] && isNearComputer() && !game.officeDoorUnlocked) {
     game.isWorking = true;
     const workRate = game.energyDrinkWorkTimer > 0 ? game.workFillRate * 3 : game.workFillRate;
@@ -330,11 +360,40 @@ function updatePlayer(dt) {
   }
 
   const speed = player.sneaking ? player.sneakSpeed : player.speed;
-  const actualSpeed = player._coffeeBoost > 0 ? speed * 1.8 : speed;
-  const nx = player.x + dx * actualSpeed * SCALE;
-  const ny = player.y + dy * actualSpeed * SCALE;
-  if (canMoveTo(nx, player.y, player.w, player.h)) player.x = nx;
-  if (canMoveTo(player.x, ny, player.w, player.h)) player.y = ny;
+  const targetSpeed = (player._coffeeBoost > 0 ? speed * 1.8 : speed) * SCALE;
+  const accel = 12;
+  const friction = 8;
+
+  // Accelerate toward target velocity
+  const targetVx = dx * targetSpeed;
+  const targetVy = dy * targetSpeed;
+  player.vx += (targetVx - player.vx) * Math.min(1, accel * dt);
+  player.vy += (targetVy - player.vy) * Math.min(1, accel * dt);
+
+  // Apply friction when no input
+  if (dx === 0) player.vx *= Math.max(0, 1 - friction * dt);
+  if (dy === 0) player.vy *= Math.max(0, 1 - friction * dt);
+
+  // Stop if very slow
+  if (Math.abs(player.vx) < 0.1) player.vx = 0;
+  if (Math.abs(player.vy) < 0.1) player.vy = 0;
+
+  // Apply movement with wall-sliding
+  const nx = player.x + player.vx;
+  const ny = player.y + player.vy;
+  if (canMoveTo(nx, ny, player.w, player.h)) {
+    player.x = nx;
+    player.y = ny;
+  } else if (canMoveTo(nx, player.y, player.w, player.h)) {
+    player.x = nx;
+    player.vy = 0; // wall slide on X axis
+  } else if (canMoveTo(player.x, ny, player.w, player.h)) {
+    player.y = ny;
+    player.vx = 0; // wall slide on Y axis
+  } else {
+    player.vx = 0;
+    player.vy = 0;
+  }
   player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
   player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
 
@@ -344,41 +403,7 @@ function updatePlayer(dt) {
   player.canInteract = null;
   const room = rooms[game.currentRoom];
 
-  if (isNearFridge() && game.fridgeItems.length > 0) {
-    player.canInteract = { type: 'fridge' };
-  }
-
-  if (isNearComputer() && !game.officeDoorUnlocked) {
-    player.canInteract = { type: 'computer' };
-  }
-
-  for (const door of room.doors) {
-    const doorX = door.x * T + T / 2, doorY = door.y * T + T / 2;
-    const dist = Math.hypot(player.x + player.w / 2 - doorX, player.y + player.h / 2 - doorY);
-    if (dist < T * 1.5) {
-      if (door.locked && !game.officeDoorUnlocked) {
-        player.canInteract = { type: 'lockedDoor', data: door };
-      } else {
-        player.canInteract = { type: 'door', data: door };
-      }
-    }
-  }
-
-  if (room.npcs) {
-    for (const npc of room.npcs) {
-      const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-      if (dist < T * 1.8) player.canInteract = { type: 'npc', data: npc };
-    }
-  }
-
-  if (room.items) {
-    for (const item of room.items) {
-      if (item.collected) continue;
-      const dist = Math.hypot(player.x - item.x, player.y - item.y);
-      if (dist < T * 1.5) player.canInteract = { type: 'item', data: item };
-    }
-  }
-
+  // Check win tiles first (highest priority - immediate win)
   if (room.winTiles) {
     for (const wt of room.winTiles) {
       const wtx = wt.x * T, wty = wt.y * T;
@@ -387,6 +412,68 @@ function updatePlayer(dt) {
         return;
       }
     }
+  }
+
+  // Collect all interactables with their distances
+  const interactables = [];
+
+  // High priority: NPCs (closest)
+  if (room.npcs) {
+    for (const npc of room.npcs) {
+      const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
+      if (dist < T * 1.8) {
+        interactables.push({ priority: 'npc', dist, type: 'npc', data: npc });
+      }
+    }
+  }
+
+  // Medium priority: Items (closest)
+  if (room.items) {
+    for (const item of room.items) {
+      if (item.collected) continue;
+      const dist = Math.hypot(player.x - item.x, player.y - item.y);
+      if (dist < T * 1.5) {
+        interactables.push({ priority: 'item', dist, type: 'item', data: item });
+      }
+    }
+  }
+
+  // Medium priority: Doors (closest)
+  for (const door of room.doors) {
+    const doorX = door.x * T + T / 2, doorY = door.y * T + T / 2;
+    const dist = Math.hypot(player.x + player.w / 2 - doorX, player.y + player.h / 2 - doorY);
+    if (dist < T * 1.5) {
+      if (door.locked && !game.officeDoorUnlocked) {
+        interactables.push({ priority: 'door', dist, type: 'lockedDoor', data: door });
+      } else {
+        interactables.push({ priority: 'door', dist, type: 'door', data: door });
+      }
+    }
+  }
+
+  // Low priority: Fridge
+  if (isNearFridge() && game.fridgeItems.length > 0) {
+    const fridgeX = 1 * T + T/2, fridgeY = 6 * T + T/2;
+    const dist = Math.hypot(player.x + player.w/2 - fridgeX, player.y + player.h/2 - fridgeY);
+    interactables.push({ priority: 'fridge', dist, type: 'fridge' });
+  }
+
+  // Low priority: Computer
+  if (isNearComputer() && !game.officeDoorUnlocked) {
+    interactables.push({ priority: 'computer', dist: 0, type: 'computer' });
+  }
+
+  // Sort by priority (npc > item/door > fridge/computer) then by distance
+  const priorityOrder = { 'npc': 0, 'item': 1, 'door': 1, 'fridge': 2, 'computer': 2 };
+  interactables.sort((a, b) => {
+    const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+    if (pDiff !== 0) return pDiff;
+    return a.dist - b.dist;
+  });
+
+  if (interactables.length > 0) {
+    const best = interactables[0];
+    player.canInteract = { type: best.type, data: best.data };
   }
 }
 
@@ -411,6 +498,22 @@ function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
       }
     }
   }
+}
+
+
+function hasLineOfSight(x1, y1, x2, y2) {
+  const room = rooms[game.currentRoom];
+  const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / (T / 2);
+  const numChecks = Math.min(Math.ceil(steps), 20);
+  for (let i = 1; i < numChecks; i++) {
+    const t = i / numChecks;
+    const cx = x1 + (x2 - x1) * t;
+    const cy = y1 + (y2 - y1) * t;
+    const gx = Math.floor(cx / T), gy = Math.floor(cy / T);
+    if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) return false;
+    if (room.grid[gy][gx] === TILE_WALL) return false;
+  }
+  return true;
 }
 
 
@@ -448,6 +551,7 @@ function updateEnemies(dt) {
       );
 
       if (game.isWorking) {
+        if (enemy.alertState === 'hunting') enemy.alertState = 'suspicious';
         continue;
       }
 
@@ -459,12 +563,44 @@ function updateEnemies(dt) {
           const retreatSpeed = enemy.speed * SCALE * 0.2;
           moveEnemyTowardTarget(enemy, enemy.x - (cdx / cdist) * T * 4, enemy.y - (cdy / cdist) * T * 4, retreatSpeed);
         }
+        if (enemy.alertState === 'hunting') enemy.alertState = 'suspicious';
         continue;
       }
 
       // Check if player is hiding and invisible via headphones
-      if (player.isHiding && player._headphoneTimer > 0) {
-        // Enemy can't detect hiding player, roam randomly instead
+      const hidden = player.isHiding && player._headphoneTimer > 0;
+
+      // Detect player with line of sight check
+      let canSeePlayer = false;
+      if (!hidden && playerDist < T * 8) {
+        canSeePlayer = hasLineOfSight(enemy.x, enemy.y, player.x + player.w / 2, player.y + player.h / 2);
+      }
+
+      // State machine for zombie AI
+      if (canSeePlayer) {
+        // Transition to hunting
+        enemy.alertState = 'hunting';
+        enemy.lastSeenX = player.x;
+        enemy.lastSeenY = player.y;
+        enemy.searchTimer = 0;
+      }
+
+      if (enemy.alertState === 'hunting') {
+        const huntSpeed = enemy.speed * SCALE * 0.45; // 1.5x normal
+        moveEnemyTowardTarget(enemy, player.x, player.y, huntSpeed);
+      } else if (enemy.alertState === 'suspicious') {
+        // Move to last seen position and search
+        enemy.searchTimer -= dt;
+        const suspDist = Math.hypot(enemy.lastSeenX - enemy.x, enemy.lastSeenY - enemy.y);
+        if (suspDist > 4) {
+          const suspSpeed = enemy.speed * SCALE * 0.21; // 0.7x normal
+          moveEnemyTowardTarget(enemy, enemy.lastSeenX, enemy.lastSeenY, suspSpeed);
+        } else if (enemy.searchTimer <= 0) {
+          // Search done, return to idle
+          enemy.alertState = 'idle';
+        }
+      } else {
+        // Idle: roam slowly to random points
         if (!enemy.roamTarget || Math.hypot(enemy.x - enemy.roamTarget.x, enemy.y - enemy.roamTarget.y) < 4) {
           enemy.roamTarget = {
             x: Math.random() * (14 * T - 4 * T) + 4 * T,
@@ -473,17 +609,9 @@ function updateEnemies(dt) {
         }
         const dist = Math.hypot(enemy.roamTarget.x - enemy.x, enemy.roamTarget.y - enemy.y);
         if (dist > 4) {
-          const speed = enemy.speed * SCALE * 0.3;
-          moveEnemyTowardTarget(enemy, enemy.roamTarget.x, enemy.roamTarget.y, speed);
+          const idleSpeed = enemy.speed * SCALE * 0.15; // slow roaming
+          moveEnemyTowardTarget(enemy, enemy.roamTarget.x, enemy.roamTarget.y, idleSpeed);
         }
-        continue;
-      }
-
-      const cdx = player.x - enemy.x, cdy = player.y - enemy.y;
-      const cdist = Math.hypot(cdx, cdy);
-      if (cdist > 0) {
-        const zombieSpeed = enemy.speed * SCALE * 0.3;
-        moveEnemyTowardTarget(enemy, player.x, player.y, zombieSpeed);
       }
 
       if (playerDist < T * 0.7) {

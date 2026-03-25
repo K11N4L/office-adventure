@@ -305,3 +305,46 @@ function drawWorkOverlay() {
 
   ctx.textAlign = 'left';
 }
+
+// --- ROOM TRANSITIONS ---
+function updateRoomTransition(dt) {
+  if (!game.roomTransition) return;
+  const rt = game.roomTransition;
+  rt.timer -= dt;
+  if (rt.timer <= 0) {
+    if (rt.phase === 'fadeOut') {
+      // Switch room
+      game.currentRoom = rt.toRoom;
+      player.x = rt.toX * T;
+      player.y = rt.toY * T;
+      player.canInteract = null;
+      player.vx = 0;
+      player.vy = 0;
+      // Handle occupied cubicle for Level 2
+      if (rt.toRoom === 'toiletArea') {
+        if (game.level === 2) {
+          game.occupiedCubicle = Math.floor(Math.random() * rooms.toiletArea.winTiles.length);
+        } else {
+          game.occupiedCubicle = -1;
+        }
+      }
+      rt.phase = 'fadeIn';
+      rt.timer = 0.3;
+    } else {
+      game.roomTransition = null;
+    }
+  }
+}
+
+function drawRoomTransition() {
+  if (!game.roomTransition) return;
+  const rt = game.roomTransition;
+  let alpha;
+  if (rt.phase === 'fadeOut') {
+    alpha = 1 - (rt.timer / rt.maxTime); // 0 → 1
+  } else {
+    alpha = rt.timer / rt.maxTime; // 1 → 0
+  }
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}

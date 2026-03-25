@@ -71,18 +71,11 @@ function tryInteract() {
       game.gameOverReason = "You walked right out the building! Fresh air hit you and you thought... why not the pub? Your mates would be proud.";
       return;
     }
-    game.currentRoom = data.toRoom;
-    player.x = data.toX * T; player.y = data.toY * T;
-    player.canInteract = null;
-    // Set occupied cubicle when entering toiletArea (Level 2 only - one cubicle is occupied)
-    if (data.toRoom === 'toiletArea') {
-      if (game.level === 2) {
-        const wt = rooms.toiletArea.winTiles;
-        game.occupiedCubicle = Math.floor(Math.random() * wt.length);
-      } else {
-        game.occupiedCubicle = -1; // Level 1: all cubicles are available
-      }
-    }
+    // Start room transition
+    game.roomTransition = {
+      toRoom: data.toRoom, toX: data.toX, toY: data.toY,
+      timer: 0.3, maxTime: 0.3, phase: 'fadeOut'
+    };
     return;
   }
 
@@ -144,9 +137,30 @@ function tryInteract() {
     if (data.interactType === 'karen_block') {
       if (!data.interacted) {
         data.interacted = true;
-        game.time -= 30;
         game.state = 'interact';
-        game.dialogueQueue = [...data.dialogue];
+        game.dialogueQueue = [
+          ...data.dialogue,
+          {
+            prompt: "Karen wants to schedule a meeting about the meeting...",
+            choices: [
+              { label: "Politely decline", next: [
+                "Brayden: I'm really sorry Karen, I've got a deadline.",
+                "Karen: A DEADLINE? We need to discuss deadline management!",
+                "*You escaped with only 15 seconds lost.*"
+              ], effect: { timeLoss: 15 } },
+              { label: "Run away", next: [
+                "Brayden: Sorry gotta go bye!",
+                "*Karen is offended. She'll remember this...*"
+              ], effect: { timeLoss: 5 } },
+              { label: "Accept the meeting", next: [
+                "Karen: Perfect! I'll send a Teams invite for tomorrow at...",
+                "Karen: ...actually, let me check everyone's calendar...",
+                "Karen: ...hmm, Wednesday works, no wait...",
+                "*You stood there for 45 seconds while Karen checked calendars.*"
+              ], effect: { timeLoss: 45 } }
+            ]
+          }
+        ];
         game.currentDialogue = game.dialogueQueue.shift();
       }
       return;
@@ -284,9 +298,42 @@ function pickFromFridge() {
 
 function advanceDialogue() {
   if (game.dialogueQueue.length > 0) {
-    game.currentDialogue = game.dialogueQueue.shift();
+    const next = game.dialogueQueue[0];
+    if (typeof next === 'object' && next.choices) {
+      // It's a choice node
+      game.dialogueQueue.shift();
+      game.dialogueChoices = { ...next, choiceIndex: 0 };
+      game.currentDialogue = null;
+      game.state = 'dialogueChoice';
+    } else {
+      game.currentDialogue = game.dialogueQueue.shift();
+    }
   } else {
     game.currentDialogue = null;
+    game.state = 'playing';
+  }
+}
+
+function selectDialogueChoice() {
+  const choice = game.dialogueChoices.choices[game.dialogueChoices.choiceIndex];
+  // Apply effects
+  if (choice.effect) {
+    if (choice.effect.timeLoss) game.time = Math.max(0, game.time - choice.effect.timeLoss);
+    if (choice.effect.workBoost) game.workMeter = Math.min(game.maxWork, game.workMeter + choice.effect.workBoost);
+    if (choice.effect.goldReward) game.gold += choice.effect.goldReward;
+    if (choice.effect.toiletChange) game.toiletMeter = Math.max(0, Math.min(game.maxToilet, game.toiletMeter + choice.effect.toiletChange));
+    if (choice.effect.workReset) {
+      game.workMeter = 0;
+      game.officeDoorUnlocked = false;
+    }
+  }
+  // Queue up the next dialogue lines
+  game.dialogueChoices = null;
+  if (choice.next && choice.next.length > 0) {
+    game.dialogueQueue = [...choice.next];
+    game.currentDialogue = game.dialogueQueue.shift();
+    game.state = 'interact';
+  } else {
     game.state = 'playing';
   }
 }
@@ -324,37 +371,67 @@ function handleNpcMenuSelect() {
   }
 
   if (option.action === 'kunal_talk') {
-    game.workMeter = 0;
-    game.officeDoorUnlocked = false;
-    game.time = Math.max(0, game.time - 60);
     game.state = 'interact';
     game.dialogueQueue = [
       "Kunal: Bro, I'm telling you, tabs are better than spaces!",
       "Brayden: Are you INSANE? Spaces are the standard!",
       "Kunal: Standard?! Your code looks like a ransom note!",
-      "Brayden: At least I don't push to main on a Friday!",
-      "Kunal: That was ONE time! And the server survived... mostly.",
-      "*You've been arguing for a while... Work meter dropped to 0 and you lost 1 minute!*",
+      {
+        prompt: "How do you respond?",
+        choices: [
+          { label: "Agree about tabs", next: [
+            "Brayden: ...actually, you might have a point about tabs.",
+            "Kunal: WAIT REALLY?! *starts happy dance*",
+            "Kunal: Best day EVER! Here, take some work points.",
+            "*Kunal is so happy he does some of your work! +15 Work Points*"
+          ], effect: { goldReward: 15 } },
+          { label: "Double down on spaces", next: [
+            "Brayden: At least I don't push to main on a Friday!",
+            "Kunal: That was ONE time! And the server survived... mostly.",
+            "*You've been arguing for ages... Work meter dropped to 0 and you lost 1 minute!*"
+          ], effect: { timeLoss: 60, workReset: true } },
+          { label: "Change the subject", next: [
+            "Brayden: Anyway... have you seen Andrew?",
+            "Kunal: That zombie? He was heading for the pub again.",
+            "Kunal: If you see him, just throw salt at him."
+          ] }
+        ]
+      }
     ];
     game.currentDialogue = game.dialogueQueue.shift();
     return;
   }
 
   if (option.action === 'lax_talk') {
-    game.workMeter = 0;
-    game.officeDoorUnlocked = false;
-    game.time = Math.max(0, game.time - 120);
     game.state = 'interact';
     game.dialogueQueue = [
       "Lax: *takes off one headphone* What's good?",
       "Brayden: Just trying to get some work done...",
       "Kunal: *walks over* Oh, we're having a meeting? Nice.",
-      "Lax: So anyway, did you see that new show on Netflix?",
-      "Kunal: Bro yes! The one with the time travel?",
-      "Brayden: Guys... I really need to work...",
-      "Lax: Relax man, the deadline's not for... *checks phone* ...oh.",
-      "Kunal: Yeah we should probably let him work.",
-      "*The three of you chatted for way too long... Work meter dropped to 0 and you lost 2 minutes!*",
+      {
+        prompt: "What do you do?",
+        choices: [
+          { label: "Join the chat", next: [
+            "Lax: So anyway, did you see that new show on Netflix?",
+            "Kunal: Bro yes! The one with the time travel?",
+            "Brayden: I... actually haven't seen it.",
+            "Lax: BRO. We're watching it at the pub tonight.",
+            "*You chatted for way too long... Lost 2 minutes!*"
+          ], effect: { timeLoss: 120, workReset: true } },
+          { label: "Excuse yourself", next: [
+            "Brayden: I really need to get back to work guys.",
+            "Lax: Fair enough bro. Respect the grind.",
+            "Kunal: Lax, you should try working some time.",
+            "Lax: *puts headphones back on* ...nah."
+          ] },
+          { label: "Ask for help", next: [
+            "Brayden: Actually... could one of you help with my work?",
+            "Lax: *long pause* ...no.",
+            "Kunal: I could, but you'd owe me one.",
+            "*Kunal helps a little. +10 Work Points but you lost 30 seconds.*"
+          ], effect: { goldReward: 10, timeLoss: 30 } }
+        ]
+      }
     ];
     game.currentDialogue = game.dialogueQueue.shift();
     return;

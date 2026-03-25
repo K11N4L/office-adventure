@@ -20,6 +20,7 @@ const game = {
   frameCount: 0,
   dialogueQueue: [],
   currentDialogue: null,
+  dialogueChoices: null, // {prompt, choices, choiceIndex}
   gameOverReason: '',
   titleBlink: 0,
   saltAmmo: 0,
@@ -57,6 +58,9 @@ const game = {
   vendorItems: [],
   vendorMenuIndex: 0,
   pauseMenuIndex: 0,
+  questLogIndex: 0,
+  // Room transitions
+  roomTransition: null, // {toRoom, toX, toY, timer, maxTime, phase}
 };
 
 // --- RANDOM QUIPS ---
@@ -101,6 +105,7 @@ const player = {
   _headphoneTimer: 0,
   isHiding: false,
   imodiumTimer: 0,
+  vx: 0, vy: 0,
 };
 
 // --- INPUT ---
@@ -143,17 +148,40 @@ window.addEventListener('keydown', e => {
       game.state = 'playing';
     }
     if (e.code === 'ArrowUp' || e.code === 'KeyW') {
-      game.pauseMenuIndex = (game.pauseMenuIndex - 1 + 2) % 2;
+      game.pauseMenuIndex = (game.pauseMenuIndex - 1 + 3) % 3;
     }
     if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-      game.pauseMenuIndex = (game.pauseMenuIndex + 1) % 2;
+      game.pauseMenuIndex = (game.pauseMenuIndex + 1) % 3;
     }
     if (e.code === 'Enter' || e.code === 'Space') {
       if (game.pauseMenuIndex === 0) {
         game.state = 'playing';
+      } else if (game.pauseMenuIndex === 1) {
+        game.state = 'questLog';
+        game.questLogIndex = 0;
       } else {
         resetGame();
       }
+    }
+  } else if (st === 'questLog') {
+    if (e.code === 'Escape') {
+      game.state = 'paused';
+    }
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.questLogIndex = Math.max(0, game.questLogIndex - 1);
+    }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.questLogIndex = Math.min(game.quests.length - 1, game.questLogIndex + 1);
+    }
+  } else if (st === 'dialogueChoice') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.dialogueChoices.choiceIndex = (game.dialogueChoices.choiceIndex - 1 + game.dialogueChoices.choices.length) % game.dialogueChoices.choices.length;
+    }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.dialogueChoices.choiceIndex = (game.dialogueChoices.choiceIndex + 1) % game.dialogueChoices.choices.length;
+    }
+    if (e.code === 'Enter' || e.code === 'KeyE') {
+      selectDialogueChoice();
     }
   } else if (st === 'interact' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE')) {
     advanceDialogue();

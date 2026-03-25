@@ -224,16 +224,32 @@ function drawVendorMenu() {
 // --- DIALOGUE ---
 function drawDialogue() {
   if (!game.currentDialogue) return;
-  const boxH = 100, boxY = canvas.height - boxH - 50;
+  const boxH = 110, boxY = canvas.height - boxH - 50;
   drawPixelRect(20, boxY, canvas.width - 40, boxH, 'rgba(0,0,0,0.9)');
   ctx.strokeStyle = '#666'; ctx.lineWidth = 2;
   ctx.strokeRect(20, boxY, canvas.width - 40, boxH);
   ctx.lineWidth = 1;
 
-  ctx.fillStyle = '#eee'; ctx.font = '13px monospace';
+  const text = game.currentDialogue;
+  const colonIdx = text.indexOf(': ');
+  let speaker = null, body = text;
+  if (colonIdx > 0 && colonIdx < 20 && !text.startsWith('*')) {
+    speaker = text.substring(0, colonIdx);
+    body = text.substring(colonIdx + 2);
+  }
+
+  let startY = boxY + 22;
+  if (speaker) {
+    ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 12px monospace';
+    ctx.fillText(speaker, 40, startY);
+    startY += 16;
+  }
+
+  ctx.fillStyle = text.startsWith('*') ? '#aaddff' : '#eee';
+  ctx.font = '13px monospace';
   const maxWidth = canvas.width - 80;
-  const words = game.currentDialogue.split(' ');
-  let line = '', lineY = boxY + 25;
+  const words = body.split(' ');
+  let line = '', lineY = startY;
   for (const word of words) {
     const testLine = line + word + ' ';
     if (ctx.measureText(testLine).width > maxWidth) {
@@ -248,11 +264,101 @@ function drawDialogue() {
   }
 }
 
+function drawDialogueChoice() {
+  if (!game.dialogueChoices) return;
+  const dc = game.dialogueChoices;
+  const boxH = 40 + dc.choices.length * 30;
+  const boxY = canvas.height - boxH - 50;
+  drawPixelRect(20, boxY, canvas.width - 40, boxH, 'rgba(0,0,0,0.92)');
+  ctx.strokeStyle = '#ffdd44'; ctx.lineWidth = 2;
+  ctx.strokeRect(20, boxY, canvas.width - 40, boxH);
+  ctx.lineWidth = 1;
+
+  // Prompt
+  if (dc.prompt) {
+    ctx.fillStyle = '#aaddff'; ctx.font = 'bold 13px monospace';
+    ctx.fillText(dc.prompt, 40, boxY + 22);
+  }
+
+  // Choices
+  for (let i = 0; i < dc.choices.length; i++) {
+    const cy = boxY + 42 + i * 30;
+    const selected = i === dc.choiceIndex;
+    if (selected) {
+      drawPixelRect(35, cy - 10, canvas.width - 80, 26, 'rgba(255,221,68,0.12)');
+      ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 12px monospace';
+      ctx.fillText('> ' + dc.choices[i].label, 50, cy + 5);
+    } else {
+      ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
+      ctx.fillText('  ' + dc.choices[i].label, 50, cy + 5);
+    }
+  }
+
+  ctx.fillStyle = '#666'; ctx.font = '10px monospace';
+  ctx.fillText('[W/S] Select  |  [E/Enter] Choose', 40, boxY + boxH - 10);
+}
+
+// --- QUEST LOG ---
+function drawQuestLog() {
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const mw = 500, mh = 400;
+  const mx = (canvas.width - mw) / 2, my = (canvas.height - mh) / 2;
+  drawPixelRect(mx, my, mw, mh, 'rgba(30,30,40,0.95)');
+  ctx.strokeStyle = '#ffdd44'; ctx.lineWidth = 2;
+  ctx.strokeRect(mx, my, mw, mh);
+  ctx.lineWidth = 1;
+
+  ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 18px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('QUEST LOG', canvas.width / 2, my + 30);
+
+  const quests = game.quests;
+  if (quests.length === 0) {
+    ctx.fillStyle = '#aaa'; ctx.font = '14px monospace';
+    ctx.fillText('No quests available', canvas.width / 2, my + 100);
+  } else {
+    // List quests
+    for (let i = 0; i < quests.length; i++) {
+      const qy = my + 55 + i * 80;
+      const selected = i === game.questLogIndex;
+      const q = quests[i];
+
+      if (selected) {
+        drawPixelRect(mx + 15, qy - 10, mw - 30, 75, 'rgba(255,221,68,0.12)');
+        ctx.strokeStyle = '#ffdd44';
+        ctx.strokeRect(mx + 15, qy - 10, mw - 30, 75);
+      }
+
+      // Quest name and status
+      ctx.fillStyle = selected ? '#ffdd44' : '#ccc';
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left';
+      const status = q.completed ? ' [COMPLETE]' : ' [ACTIVE]';
+      ctx.fillText(q.name + status, mx + 30, qy + 5);
+
+      // Giver
+      ctx.fillStyle = '#aaa'; ctx.font = '11px monospace';
+      ctx.fillText('Giver: ' + q.giver, mx + 30, qy + 20);
+
+      // Description
+      ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+      ctx.fillText('Find: ' + q.itemNeeded.replace(/_/g, ' '), mx + 30, qy + 35);
+      ctx.fillText('Reward: ' + q.rewardDesc, mx + 30, qy + 50);
+    }
+  }
+
+  ctx.fillStyle = '#666'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('[W/S] Select  |  [ESC] Close', canvas.width / 2, my + mh - 15);
+  ctx.textAlign = 'left';
+}
+
 // --- PAUSE MENU ---
 function drawPauseMenu() {
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const mw = 300, mh = 180;
+  const mw = 300, mh = 220;
   const mx = (canvas.width - mw) / 2, my = (canvas.height - mh) / 2;
   drawPixelRect(mx, my, mw, mh, 'rgba(30,30,40,0.95)');
   ctx.strokeStyle = '#888'; ctx.lineWidth = 2;
@@ -261,7 +367,7 @@ function drawPauseMenu() {
   ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 18px monospace';
   ctx.textAlign = 'center';
   ctx.fillText('PAUSED', canvas.width / 2, my + 35);
-  const options = ['Resume', 'Back to Menu'];
+  const options = ['Resume', 'Quest Log', 'Back to Menu'];
   for (let i = 0; i < options.length; i++) {
     const oy = my + 70 + i * 40;
     const selected = i === game.pauseMenuIndex;
