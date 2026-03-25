@@ -10,6 +10,7 @@ const game = {
   maxWork: 100,
   workThreshold: 60,
   workFillRate: 5,
+  workDecayRate: 0.8, // work meter decays per second when not working
   isWorking: false,
   workTask: '',
   workTaskTimer: 0,

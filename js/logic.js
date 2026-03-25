@@ -721,6 +721,15 @@ function updateTimers(dt) {
     player.imodiumTimer -= dt;
   }
 
+  // Work meter decay - slowly drops when not working
+  if (!game.isWorking && game.workMeter > 0) {
+    game.workMeter = Math.max(0, game.workMeter - game.workDecayRate * dt);
+    // Re-lock door if work drops below threshold
+    if (game.workMeter < game.workThreshold && game.officeDoorUnlocked) {
+      game.officeDoorUnlocked = false;
+    }
+  }
+
   let toiletRate = game.energyDrinkToiletTimer > 0 ? game.toiletRiseRate * 3 : game.toiletRiseRate;
   if (player.imodiumTimer > 0) {
     toiletRate *= 0.3;
