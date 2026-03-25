@@ -292,7 +292,7 @@ function updatePlayer(dt) {
   // Block movement during room transitions
   if (game.roomTransition) return;
 
-  if (keys['e'] && isNearComputer() && !game.officeDoorUnlocked) {
+  if (keys['e'] && isNearComputer()) {
     game.isWorking = true;
     const workRate = game.energyDrinkWorkTimer > 0 ? game.workFillRate * 3 : game.workFillRate;
     game.workMeter = Math.min(game.maxWork, game.workMeter + workRate * dt);
@@ -332,7 +332,7 @@ function updatePlayer(dt) {
       game.officeDoorUnlocked = true;
       game.state = 'interact';
       game.dialogueQueue = [];
-      game.currentDialogue = "You've done enough work! The office door is now UNLOCKED. Time to make your escape to the toilet...";
+      game.currentDialogue = "You've done enough work! The office door is now UNLOCKED. But keep working to build a buffer — your progress decays over time!";
     }
     player.walking = false;
     return;
@@ -458,8 +458,8 @@ function updatePlayer(dt) {
     interactables.push({ priority: 'fridge', dist, type: 'fridge' });
   }
 
-  // Low priority: Computer
-  if (isNearComputer() && !game.officeDoorUnlocked) {
+  // Low priority: Computer (always available for working)
+  if (isNearComputer()) {
     interactables.push({ priority: 'computer', dist: 0, type: 'computer' });
   }
 
