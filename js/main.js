@@ -4,14 +4,12 @@ function gameLoop(timestamp) {
   lastTime = timestamp;
   game.frameCount++;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   for (const k in justPressed) delete justPressed[k];
-
   switch (game.state) {
     case 'title':
       drawTitle();
       break;
-
+    case 'paused':
     case 'playing':
     case 'interact':
     case 'fridgeMenu':
@@ -29,7 +27,6 @@ function gameLoop(timestamp) {
         updateEmailNotifications(dt);
       }
       drawRoom();
-
       const room = rooms[game.currentRoom];
       if (room.items) room.items.forEach(drawItem);
       if (room.enemies) room.enemies.forEach(drawEnemy);
@@ -44,23 +41,19 @@ function gameLoop(timestamp) {
       drawEventOverlay();
       drawEmailNotifications();
       if (game.isWorking) drawWorkOverlay();
-
       if (game.state === 'interact') drawDialogue();
       if (game.state === 'fridgeMenu') drawFridgeMenu();
       if (game.state === 'npcMenu') drawNpcMenu();
       if (game.state === 'vendorMenu') drawVendorMenu();
+      if (game.state === 'paused') drawPauseMenu();
       break;
-
     case 'pub':
       drawPubScreen();
       break;
-
     case 'win':
       drawWinScreen();
       break;
   }
-
   requestAnimationFrame(gameLoop);
 }
-
 requestAnimationFrame(gameLoop);

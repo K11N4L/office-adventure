@@ -39,3 +39,6 @@ function drawSaltProjectiles() {
   }
 }
 
+
+
+function drawUI() {

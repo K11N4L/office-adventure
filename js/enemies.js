@@ -60,3 +60,5 @@ function drawEnemy(enemy) {
   ctx.fillText(enemy.name, x + w/2 - nw/2, y - 8);
 }
 
+
+

@@ -106,3 +106,5 @@ function drawPlayer() {
 }
 
 // --- NPC RENDERING ---
+
+

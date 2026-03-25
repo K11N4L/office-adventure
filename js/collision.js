@@ -23,3 +23,5 @@ function canMoveTo(nx, ny, w, h) {
   }
   return true;
 }
+
+

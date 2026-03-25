@@ -209,6 +209,8 @@ function tryInteract() {
 }
 
 function pickFromFridge() {
+
+function pickFromFridge() {
   if (game.fridgeItems.length === 0) return;
   const itemType = game.fridgeItems[game.fridgeMenuIndex];
 
@@ -237,6 +239,8 @@ function pickFromFridge() {
 }
 
 function advanceDialogue() {
+
+function advanceDialogue() {
   if (game.dialogueQueue.length > 0) {
     game.currentDialogue = game.dialogueQueue.shift();
   } else {
@@ -244,6 +248,8 @@ function advanceDialogue() {
     game.state = 'playing';
   }
 }
+
+function handleNpcMenuSelect() {
 
 function handleNpcMenuSelect() {
   if (game.npcMenuOptions.length === 0) return;
@@ -331,17 +337,48 @@ function handleNpcMenuSelect() {
 }
 
 function useItem(slot) {
-  const item = player.inventory[slot];
-  if (!item) return;
-  const itemType = item.itemType || item.type;
-  switch (itemType) {
-    case 'coffee': player._coffeeBoost = 8; break;
-    case 'headphones': player._headphoneTimer = 6; break;
-    case 'imodium': player.imodiumTimer = 20; break;
-    case 'air_freshener': throwPaperBall(); break;
-    case 'energy_drink':
-      game.toiletMeter = Math.max(0, game.toiletMeter - 30);
-      break;
+
+function handleVendorBuy() {
+  if (game.vendorItems.length === 0) return;
+  const item = game.vendorItems[game.vendorMenuIndex];
+
+  // Special handling for paper balls
+  if (item.itemType === 'paper_balls') {
+    if (game.gold >= item.cost) {
+      game.gold -= item.cost;
+      game.paperBallAmmo = (game.paperBallAmmo || 0) + 5;
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Kunal: Here's 5 paper balls. Go cause some chaos!";
+      return;
+    } else {
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
+      return;
+    }
   }
-  player.inventory[slot] = null;
+
+  if (game.gold >= item.cost) {
+    game.gold -= item.cost;
+    // Give player the item
+    const emptySlot = player.inventory.indexOf(null);
+    if (emptySlot !== -1) {
+      player.inventory[emptySlot] = { name: item.name, itemType: item.itemType, type: 'pickup' };
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Kunal: Nice doing business! Here's your " + item.name + ".";
+    } else {
+      game.state = 'interact';
+      game.dialogueQueue = [];
+      game.currentDialogue = "Your pockets are full! Use or drop an item first.";
+    }
+  } else {
+    game.state = 'interact';
+    game.dialogueQueue = [];
+    game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
+  }
 }
+
+
+function tryInteract() {

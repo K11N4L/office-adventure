@@ -255,6 +255,8 @@ function drawTitleBraydenAnimated(bx, by, s, frame, facingLeft) {
 }
 
 function drawTitle() {
+
+function drawTitle() {
   const W = canvas.width, H = canvas.height;
   const cx = W / 2;
   const floorY = H * 0.45;
@@ -439,6 +441,8 @@ function drawTitle() {
 
 // --- PUB SCREEN ---
 function drawPubScreen() {
+
+function drawPubScreen() {
   // Warm pub background
   ctx.fillStyle = '#1a0e06';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -543,6 +547,8 @@ function drawPubScreen() {
 
 // --- WIN SCREEN ---
 function drawWinScreen() {
+
+function drawWinScreen() {
   // Heavenly bathroom glow
   ctx.fillStyle = '#060e1a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -644,3 +650,6 @@ function drawWinScreen() {
   ctx.textAlign = 'left';
 }
 
+
+
+function drawEffects() {

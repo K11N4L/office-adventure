@@ -187,3 +187,6 @@ function drawRoom() {
   }
 }
 
+
+
+function drawPlayer() {

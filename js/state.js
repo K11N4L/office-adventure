@@ -56,6 +56,7 @@ const game = {
   // Vendor
   vendorItems: [],
   vendorMenuIndex: 0,
+  pauseMenuIndex: 0,
 };
 
 // --- RANDOM QUIPS ---
@@ -127,12 +128,33 @@ window.addEventListener('keydown', e => {
       startGame();
     }
   } else if (st === 'playing') {
+    if (e.code === 'Escape') {
+      game.state = 'paused';
+      game.pauseMenuIndex = 0;
+    }
     if (e.code === 'KeyE') tryInteract();
     if (e.code === 'Digit1') useItem(0);
     if (e.code === 'Digit2') useItem(1);
     if (e.code === 'Space' && game.saltAmmo > 0) fireSalt();
     if (e.code === 'KeyH') toggleHiding();
     if (e.code === 'KeyQ') throwPaperBall();
+  } else if (st === 'paused') {
+    if (e.code === 'Escape') {
+      game.state = 'playing';
+    }
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      game.pauseMenuIndex = (game.pauseMenuIndex - 1 + 2) % 2;
+    }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      game.pauseMenuIndex = (game.pauseMenuIndex + 1) % 2;
+    }
+    if (e.code === 'Enter' || e.code === 'Space') {
+      if (game.pauseMenuIndex === 0) {
+        game.state = 'playing';
+      } else {
+        resetGame();
+      }
+    }
   } else if (st === 'interact' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE')) {
     advanceDialogue();
   } else if (st === 'fridgeMenu') {

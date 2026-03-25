@@ -111,7 +111,7 @@ function startGame() {
     // Add Karin and Rebecca NPCs to office
     rooms.office.npcs.push(
       { x: 1 * T, y: 3 * T, name: 'Karin', type: 'coworker', interactType: 'karin_quest',
-        roaming: false, originX: 1 * T, originY: 3 * T, sprite: 'karin_quest',
+        roaming: false, originX: 1 * T, originY: 3 * T, sprite: 'karin',
         dialogue: ["Karin: Hey Brayden! I've got some tasks for you if you're bored..."] },
       { x: 1 * T, y: 7 * T, name: 'Rebecca', type: 'coworker', interactType: 'rebecca_quest',
         roaming: false, originX: 1 * T, originY: 7 * T, sprite: 'rebecca',
@@ -138,6 +138,10 @@ function startGame() {
 }
 
 function resetGame() { game.state = 'title'; game.levelSelectIndex = game.level - 1; }
+
+function resetGame() { game.state = 'title'; game.levelSelectIndex = game.level - 1; }
+
+function isNearComputer() {
 
 function isNearComputer() {
   if (game.currentRoom !== 'office') return false;
@@ -250,6 +254,8 @@ function drawPaperBalls() {
     }
   }
 }
+
+function updatePlayer(dt) {
 
 function updatePlayer(dt) {
   if (game.state !== 'playing') return;
@@ -381,6 +387,8 @@ function updatePlayer(dt) {
     }
   }
 }
+
+function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
 
 function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
   const dx = targetX - enemy.x, dy = targetY - enemy.y;
@@ -528,151 +536,6 @@ function updateEnemies(dt) {
 }
 
 function updateNpcMovement(dt) {
-  const room = rooms[game.currentRoom];
-  if (!room.npcs) return;
-  for (const npc of room.npcs) {
-    if (npc.chasePlayer) {
-      const dx = player.x - npc.x, dy = player.y - npc.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > T * 0.8) {
-        const speed = (npc.chaseSpeed || 0.15) * SCALE;
-        moveEnemyTowardTarget(npc, player.x, player.y, speed);
-      }
-    }
-    if (npc.roaming && !npc.chasePlayer) {
-      npc.roamTimer -= dt;
-      if (npc.roamTimer <= 0 || !npc.roamTarget) {
-        const minX = 2 * T, maxX = 14 * T;
-        const minY = 3 * T, maxY = 10 * T;
-        npc.roamTarget = {
-          x: minX + Math.random() * (maxX - minX),
-          y: minY + Math.random() * (maxY - minY),
-        };
-        npc.roamTimer = 4 + Math.random() * 5;
-      }
-      const dx = npc.roamTarget.x - npc.x, dy = npc.roamTarget.y - npc.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 4) {
-        moveEnemyTowardTarget(npc, npc.roamTarget.x, npc.roamTarget.y, npc.roamSpeed * SCALE);
-      }
-    }
-  }
-
-  // Sleeping Kunal - sends player back to office (works in any room)
-  for (const npc of room.npcs) {
-    if (npc.sleeping) {
-      const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-      if (dist < T * 1.5) {
-        game.workMeter = 0;
-        game.officeDoorUnlocked = false;
-        game.currentRoom = 'office';
-        const start = rooms.office.playerStart;
-        player.x = start.x; player.y = start.y;
-        game.state = 'interact';
-        game.dialogueQueue = [
-          "Kunal: *wakes up startled* BRAYDEN?! What are you doing here?!",
-          "Kunal: You're supposed to be WORKING! Come on, back to the office.",
-          "Kunal: *drags you back to your desk*",
-          "*Your work meter has been reset to 0! Toilet meter unchanged.*",
-        ];
-        game.currentDialogue = game.dialogueQueue.shift();
-        return;
-      }
-    }
-  }
-
-  if (game.currentRoom === 'lobby') {
-    for (const npc of room.npcs) {
-      if (npc.interactType === 'lax_lobby' && npc.chasePlayer) {
-        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-        if (dist < T * 0.8) {
-          game.time = Math.max(0, game.time - 90);
-          for (const k of room.npcs) {
-            if (k.sleeping) k.sleeping = false;
-          }
-          game.state = 'interact';
-          game.dialogueQueue = [
-            "Lax: Bro you look hungry. *shoves sandwich in your face*",
-            "Brayden: I don't have time for-",
-            "Lax: Just eat. Trust me.",
-            "*You ate Lax's sandwich. You lost 1:30 off the clock.*",
-            "Kunal: *wakes up from the sofa* What's going on? ...FOOD?!",
-            "*Kunal is now awake! Watch out...*",
-          ];
-          game.currentDialogue = game.dialogueQueue.shift();
-          npc.chasePlayer = false;
-          npc.x = npc.originX;
-          npc.y = npc.originY;
-          return;
-        }
-      }
-    }
-  }
-
-  if (game.currentRoom === 'lobby') {
-    for (const npc of room.npcs) {
-      if (npc.interactType === 'boss_patrol') {
-        npc.catchCooldown -= dt;
-        if (npc.catchCooldown <= 0) {
-          const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-          if (dist < npc.detectionRange && !player.isHiding && player._headphoneTimer <= 0) {
-            game.time -= 120;
-            game.workMeter = 0;
-            game.officeDoorUnlocked = false;
-            npc.catchCooldown = 30;
-            game.state = 'interact';
-            game.dialogueQueue = [...npc.dialogue];
-            game.currentDialogue = game.dialogueQueue.shift();
-            return;
-          }
-        }
-      }
-    }
-  }
-
-  if (game.currentRoom === 'toiletHall') {
-    for (const npc of room.npcs) {
-      if ((npc.interactType === 'kunal_hall' || npc.interactType === 'lax_hall') && npc.chasePlayer) {
-        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-        if (dist < T * 0.8) {
-          game.state = 'pub';
-          game.gameOverReason = `${npc.name} caught up to you in the hallway. "${npc.name === 'Kunal' ? "Come on mate, the pub's right there!" : "Bro just come with us, forget the toilet..."}" And just like that, you're at the pub.`;
-          return;
-        }
-      }
-      if (npc.interactType === 'karen_block' && !npc.interacted) {
-        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-        if (dist < npc.autoRange && !player.isHiding) {
-          npc.interacted = true;
-          game.time -= 30;
-          game.state = 'interact';
-          game.dialogueQueue = [...npc.dialogue];
-          game.currentDialogue = game.dialogueQueue.shift();
-          return;
-        }
-      }
-      if (npc.interactType === 'greg_story' && !npc.storyActive) {
-        const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
-        if (dist < npc.autoRange && !player.isHiding) {
-          npc.storyActive = true;
-          game.time -= 30;
-          game.state = 'interact';
-          game.dialogueQueue = [...npc.dialogue];
-          game.currentDialogue = game.dialogueQueue.shift();
-          return;
-        }
-      }
-    }
-  }
-
-  if (game.currentRoom === 'stairwell') {
-    for (const npc of room.npcs) {
-      if (npc.interactType === 'delivery_driver' && game.deliveryDriverMoved) {
-        npc.x = 2 * T;
-      }
-    }
-  }
-}
 
 function updateSaltProjectiles(dt) {
   const room = rooms[game.currentRoom];
@@ -740,60 +603,37 @@ function updateTimers(dt) {
 }
 
 function fireSalt() {
-  if (game.saltAmmo <= 0) return;
-  game.saltAmmo--;
-  let dx = 0, dy = 0;
-  if (player.facing === 'up') dy = -1;
-  else if (player.facing === 'down') dy = 1;
-  else if (player.facing === 'left') dx = -1;
-  else dx = 1;
 
-  game.saltProjectiles.push({
-    x: player.x + player.w / 2,
-    y: player.y + player.h / 2,
-    dx, dy,
-    life: 1.5,
-  });
-}
+function updateTimers(dt) {
+  if (game.state !== 'playing') return;
 
-function handleVendorBuy() {
-  if (game.vendorItems.length === 0) return;
-  const item = game.vendorItems[game.vendorMenuIndex];
-
-  // Special handling for paper balls
-  if (item.itemType === 'paper_balls') {
-    if (game.gold >= item.cost) {
-      game.gold -= item.cost;
-      game.paperBallAmmo = (game.paperBallAmmo || 0) + 5;
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Kunal: Here's 5 paper balls. Go cause some chaos!";
-      return;
-    } else {
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
-      return;
-    }
+  game.time -= dt;
+  if (game.time <= 0) {
+    game.time = 0;
+    game.state = 'pub';
+    game.gameOverReason = "Time's up! You took too long and your bladder couldn't hold. Straight to the pub to drown your sorrows...";
   }
 
-  if (game.gold >= item.cost) {
-    game.gold -= item.cost;
-    // Give player the item
-    const emptySlot = player.inventory.indexOf(null);
-    if (emptySlot !== -1) {
-      player.inventory[emptySlot] = { name: item.name, itemType: item.itemType, type: 'pickup' };
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Kunal: Nice doing business! Here's your " + item.name + ".";
-    } else {
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "Your pockets are full! Use or drop an item first.";
-    }
-  } else {
-    game.state = 'interact';
-    game.dialogueQueue = [];
-    game.currentDialogue = "Kunal: You can't afford that mate! Need " + item.cost + " work points, you've got " + game.gold + ".";
+  if (game.energyDrinkWorkTimer > 0) {
+    game.energyDrinkWorkTimer -= dt;
+  }
+  if (game.energyDrinkToiletTimer > 0) {
+    game.energyDrinkToiletTimer -= dt;
+  }
+
+  if (player.imodiumTimer > 0) {
+    player.imodiumTimer -= dt;
+  }
+
+  let toiletRate = game.energyDrinkToiletTimer > 0 ? game.toiletRiseRate * 3 : game.toiletRiseRate;
+  if (player.imodiumTimer > 0) {
+    toiletRate *= 0.3;
+  }
+  game.toiletMeter = Math.min(game.maxToilet, game.toiletMeter + toiletRate * dt);
+  if (game.toiletMeter >= game.maxToilet) {
+    game.state = 'pub';
+    game.gameOverReason = "Your toilet meter hit 100%! You didn't make it in time... Embarrassed, you fled straight to the pub.";
   }
 }
+
+function fireSalt() {

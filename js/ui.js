@@ -223,28 +223,37 @@ function drawVendorMenu() {
 
 // --- DIALOGUE ---
 function drawDialogue() {
-  if (!game.currentDialogue) return;
-  const boxH = 100, boxY = canvas.height - boxH - 50;
-  drawPixelRect(20, boxY, canvas.width - 40, boxH, 'rgba(0,0,0,0.9)');
-  ctx.strokeStyle = '#666'; ctx.lineWidth = 2;
-  ctx.strokeRect(20, boxY, canvas.width - 40, boxH);
+
+
+// --- PAUSE MENU ---
+function drawPauseMenu() {
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const mw = 300, mh = 180;
+  const mx = (canvas.width - mw) / 2, my = (canvas.height - mh) / 2;
+  drawPixelRect(mx, my, mw, mh, 'rgba(30,30,40,0.95)');
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 2;
+  ctx.strokeRect(mx, my, mw, mh);
   ctx.lineWidth = 1;
-
-  ctx.fillStyle = '#eee'; ctx.font = '13px monospace';
-  const maxWidth = canvas.width - 80;
-  const words = game.currentDialogue.split(' ');
-  let line = '', lineY = boxY + 25;
-  for (const word of words) {
-    const testLine = line + word + ' ';
-    if (ctx.measureText(testLine).width > maxWidth) {
-      ctx.fillText(line, 40, lineY); line = word + ' '; lineY += 18;
-    } else line = testLine;
+  ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 18px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('PAUSED', canvas.width / 2, my + 35);
+  const options = ['Resume', 'Back to Menu'];
+  for (let i = 0; i < options.length; i++) {
+    const oy = my + 70 + i * 40;
+    const selected = i === game.pauseMenuIndex;
+    if (selected) {
+      drawPixelRect(mx + 30, oy - 14, mw - 60, 30, 'rgba(255,221,68,0.15)');
+      ctx.fillStyle = '#ffdd44';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText('> ' + options[i] + ' <', canvas.width / 2, oy + 5);
+    } else {
+      ctx.fillStyle = '#aaa';
+      ctx.font = '14px monospace';
+      ctx.fillText(options[i], canvas.width / 2, oy + 5);
+    }
   }
-  ctx.fillText(line, 40, lineY);
-
-  if (game.frameCount % 40 < 25) {
-    ctx.fillStyle = '#aaa'; ctx.font = '10px monospace';
-    ctx.fillText('Press [E] or [SPACE] to continue...', 40, boxY + boxH - 12);
-  }
+  ctx.fillStyle = '#666'; ctx.font = '10px monospace';
+  ctx.fillText('[W/S] Select  |  [Enter] Confirm  |  [ESC] Resume', canvas.width / 2, my + mh - 15);
+  ctx.textAlign = 'left';
 }
-
