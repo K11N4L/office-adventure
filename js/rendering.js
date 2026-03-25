@@ -186,7 +186,3 @@ function drawRoom() {
     ctx.textAlign = 'left';
   }
 }
-
-
-
-function drawPlayer() {

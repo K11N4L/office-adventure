@@ -223,7 +223,30 @@ function drawVendorMenu() {
 
 // --- DIALOGUE ---
 function drawDialogue() {
+  if (!game.currentDialogue) return;
+  const boxH = 100, boxY = canvas.height - boxH - 50;
+  drawPixelRect(20, boxY, canvas.width - 40, boxH, 'rgba(0,0,0,0.9)');
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 2;
+  ctx.strokeRect(20, boxY, canvas.width - 40, boxH);
+  ctx.lineWidth = 1;
 
+  ctx.fillStyle = '#eee'; ctx.font = '13px monospace';
+  const maxWidth = canvas.width - 80;
+  const words = game.currentDialogue.split(' ');
+  let line = '', lineY = boxY + 25;
+  for (const word of words) {
+    const testLine = line + word + ' ';
+    if (ctx.measureText(testLine).width > maxWidth) {
+      ctx.fillText(line, 40, lineY); line = word + ' '; lineY += 18;
+    } else line = testLine;
+  }
+  ctx.fillText(line, 40, lineY);
+
+  if (game.frameCount % 40 < 25) {
+    ctx.fillStyle = '#aaa'; ctx.font = '10px monospace';
+    ctx.fillText('Press [E] or [SPACE] to continue...', 40, boxY + boxH - 12);
+  }
+}
 
 // --- PAUSE MENU ---
 function drawPauseMenu() {

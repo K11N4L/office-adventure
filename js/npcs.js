@@ -187,7 +187,7 @@ function drawNPC(npc) {
 
 
 
-// --- NPC MOVEMENT UPDATES ---
+// --- NPC MOVEMENT ---
 
 function updateNpcMovement(dt) {
   const room = rooms[game.currentRoom];
@@ -336,4 +336,3 @@ function updateNpcMovement(dt) {
   }
 }
 
-function updateSaltProjectiles(dt) {

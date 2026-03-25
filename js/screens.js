@@ -80,6 +80,7 @@ function drawTitleCharacter(cx, cy, who, scale) {
   }
 }
 
+
 function drawTitleDesk(x, y, s) {
   // Desk surface
   drawPixelRect(x, y, 40 * s, 20 * s, '#8a7050');
@@ -108,6 +109,7 @@ function drawTitleDesk(x, y, s) {
   drawPixelRect(x + 7 * s, y + 4 * s, 2 * s, 3 * s, '#ddd');
 }
 
+
 function drawTitlePapers(x, y, s) {
   // Scattered papers
   drawPixelRect(x, y, 10 * s, 13 * s, '#f0ead8');
@@ -121,6 +123,7 @@ function drawTitlePapers(x, y, s) {
   drawPixelRect(x + 5 * s, y + 9 * s, 8 * s, 1 * s, '#aaa');
 }
 
+
 function drawTitleFridge(x, y, s) {
   drawPixelRect(x, y, 16 * s, 30 * s, '#d0d8e0');
   drawPixelRect(x + 1 * s, y + 1 * s, 14 * s, 16 * s, '#bcc4cc');
@@ -132,6 +135,7 @@ function drawTitleFridge(x, y, s) {
   drawPixelRect(x + 7 * s, y + 6 * s, 3 * s, 3 * s, '#44e');
   drawPixelRect(x + 4 * s, y + 10 * s, 3 * s, 3 * s, '#4a4');
 }
+
 
 function drawTitleToilet(x, y, s) {
   // Glow
@@ -170,6 +174,7 @@ function drawTitleToilet(x, y, s) {
   ctx.fillText('~', x + 24 * s, y - 2 * s + so * 1.2);
 }
 
+
 function drawTitleChair(x, y, s) {
   // Seat
   drawPixelRect(x, y, 12 * s, 4 * s, '#3a5a8a');
@@ -184,6 +189,7 @@ function drawTitleChair(x, y, s) {
   drawPixelRect(x + 9 * s, y + 9 * s, 3 * s, 2 * s, '#555');
 }
 
+
 function drawTitlePlant(x, y, s) {
   // Pot
   drawPixelRect(x + 2 * s, y + 8 * s, 8 * s, 8 * s, '#a06030');
@@ -194,6 +200,7 @@ function drawTitlePlant(x, y, s) {
   drawPixelRect(x + 8 * s, y + 1 * s, 4 * s, 7 * s, '#4a9a3a');
   drawPixelRect(x + 4 * s, y - 3 * s, 4 * s, 5 * s, '#3a8a2a');
 }
+
 
 function drawTitleBraydenAnimated(bx, by, s, frame, facingLeft) {
   // Animated Brayden with clenching walk cycle
@@ -254,7 +261,6 @@ function drawTitleBraydenAnimated(bx, by, s, frame, facingLeft) {
   }
 }
 
-function drawTitle() {
 
 function drawTitle() {
   const W = canvas.width, H = canvas.height;
@@ -440,7 +446,6 @@ function drawTitle() {
 }
 
 // --- PUB SCREEN ---
-function drawPubScreen() {
 
 function drawPubScreen() {
   // Warm pub background
@@ -546,7 +551,6 @@ function drawPubScreen() {
 }
 
 // --- WIN SCREEN ---
-function drawWinScreen() {
 
 function drawWinScreen() {
   // Heavenly bathroom glow
@@ -652,4 +656,3 @@ function drawWinScreen() {
 
 
 
-function drawEffects() {

@@ -38,7 +38,3 @@ function drawSaltProjectiles() {
     ctx.fillRect(p.x + 1, p.y + 1, 3, 3);
   }
 }
-
-
-
-function drawUI() {

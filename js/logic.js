@@ -137,11 +137,8 @@ function startGame() {
   }
 }
 
-function resetGame() { game.state = 'title'; game.levelSelectIndex = game.level - 1; }
 
 function resetGame() { game.state = 'title'; game.levelSelectIndex = game.level - 1; }
-
-function isNearComputer() {
 
 function isNearComputer() {
   if (game.currentRoom !== 'office') return false;
@@ -159,11 +156,13 @@ function isNearComputer() {
   return false;
 }
 
+
 function isNearFridge() {
   if (game.currentRoom !== 'office') return false;
   const fridgeX = 1 * T + T/2, fridgeY = 6 * T + T/2;
   return Math.hypot(player.x + player.w/2 - fridgeX, player.y + player.h/2 - fridgeY) < T * 1.8;
 }
+
 
 function getNearestDesk() {
   const room = rooms[game.currentRoom];
@@ -181,6 +180,7 @@ function getNearestDesk() {
   return nearest;
 }
 
+
 function toggleHiding() {
   if (player.isHiding) {
     player.isHiding = false;
@@ -194,6 +194,7 @@ function toggleHiding() {
   }
 }
 
+
 function throwPaperBall() {
   const dirs = { up: {dx:0,dy:-1}, down: {dx:0,dy:1}, left: {dx:-1,dy:0}, right: {dx:1,dy:0} };
   const d = dirs[player.facing] || dirs.down;
@@ -203,6 +204,7 @@ function throwPaperBall() {
     landX: 0, landY: 0, distractTimer: 4
   });
 }
+
 
 function updatePaperBalls(dt) {
   const room = rooms[game.currentRoom];
@@ -235,6 +237,7 @@ function updatePaperBalls(dt) {
   }
 }
 
+
 function drawPaperBalls() {
   for (const pb of game.paperBalls) {
     ctx.fillStyle = '#d4c8a0';
@@ -255,7 +258,6 @@ function drawPaperBalls() {
   }
 }
 
-function updatePlayer(dt) {
 
 function updatePlayer(dt) {
   if (game.state !== 'playing') return;
@@ -388,7 +390,6 @@ function updatePlayer(dt) {
   }
 }
 
-function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
 
 function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
   const dx = targetX - enemy.x, dy = targetY - enemy.y;
@@ -411,6 +412,7 @@ function moveEnemyTowardTarget(enemy, targetX, targetY, maxSpeed) {
     }
   }
 }
+
 
 function updateEnemies(dt) {
   const room = rooms[game.currentRoom];
@@ -535,7 +537,6 @@ function updateEnemies(dt) {
   }
 }
 
-function updateNpcMovement(dt) {
 
 function updateSaltProjectiles(dt) {
   const room = rooms[game.currentRoom];
@@ -570,39 +571,6 @@ function updateSaltProjectiles(dt) {
   }
 }
 
-function updateTimers(dt) {
-  if (game.state !== 'playing') return;
-
-  game.time -= dt;
-  if (game.time <= 0) {
-    game.time = 0;
-    game.state = 'pub';
-    game.gameOverReason = "Time's up! You took too long and your bladder couldn't hold. Straight to the pub to drown your sorrows...";
-  }
-
-  if (game.energyDrinkWorkTimer > 0) {
-    game.energyDrinkWorkTimer -= dt;
-  }
-  if (game.energyDrinkToiletTimer > 0) {
-    game.energyDrinkToiletTimer -= dt;
-  }
-
-  if (player.imodiumTimer > 0) {
-    player.imodiumTimer -= dt;
-  }
-
-  let toiletRate = game.energyDrinkToiletTimer > 0 ? game.toiletRiseRate * 3 : game.toiletRiseRate;
-  if (player.imodiumTimer > 0) {
-    toiletRate *= 0.3;
-  }
-  game.toiletMeter = Math.min(game.maxToilet, game.toiletMeter + toiletRate * dt);
-  if (game.toiletMeter >= game.maxToilet) {
-    game.state = 'pub';
-    game.gameOverReason = "Your toilet meter hit 100%! You didn't make it in time... Embarrassed, you fled straight to the pub.";
-  }
-}
-
-function fireSalt() {
 
 function updateTimers(dt) {
   if (game.state !== 'playing') return;
@@ -636,4 +604,21 @@ function updateTimers(dt) {
   }
 }
 
+
 function fireSalt() {
+  if (game.saltAmmo <= 0) return;
+  game.saltAmmo--;
+  let dx = 0, dy = 0;
+  if (player.facing === 'up') dy = -1;
+  else if (player.facing === 'down') dy = 1;
+  else if (player.facing === 'left') dx = -1;
+  else dx = 1;
+
+  game.saltProjectiles.push({
+    x: player.x + player.w / 2,
+    y: player.y + player.h / 2,
+    dx, dy,
+    life: 1.5,
+  });
+}
+
