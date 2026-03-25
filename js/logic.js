@@ -292,51 +292,6 @@ function updatePlayer(dt) {
   // Block movement during room transitions
   if (game.roomTransition) return;
 
-  if (keys['e'] && isNearComputer()) {
-    game.isWorking = true;
-    const workRate = game.energyDrinkWorkTimer > 0 ? game.workFillRate * 3 : game.workFillRate;
-    game.workMeter = Math.min(game.maxWork, game.workMeter + workRate * dt);
-    // Rotate funny work task descriptions
-    game.workTaskTimer -= dt;
-    if (game.workTaskTimer <= 0 || !game.workTask) {
-      game.workTaskTimer = 1.8 + Math.random() * 2;
-      const tasks = [
-        'Updating spreadsheet nobody reads...',
-        'Replying all to a chain of 47 emails...',
-        'Renaming final_v2_FINAL_actual.docx...',
-        'Attending meeting that could\'ve been an email...',
-        'Filling in timesheet... creatively...',
-        'Writing passive-aggressive Slack message...',
-        'Pretending to understand the Jira board...',
-        'Moving tickets to "In Progress"...',
-        'Googling error message on Stack Overflow...',
-        'Nodding along in standup...',
-        'Copy-pasting from ChatGPT...',
-        'Making the logo bigger...',
-        'Clearing 200 unread notifications...',
-        'Submitting expense report from 6 months ago...',
-        'Restarting computer for the 3rd time...',
-        'Watching progress bar... watching you...',
-        'Doing "synergy" on the "deliverables"...',
-        'Aligning boxes in PowerPoint...',
-        'Pretending VPN works...',
-        'Deleting emails without reading them...',
-        'Writing unit tests... LOL just kidding...',
-        'Calculating how long until lunch...',
-        'Staring at code you wrote last Friday...',
-        'Wondering who approved this codebase...',
-      ];
-      game.workTask = tasks[Math.floor(Math.random() * tasks.length)];
-    }
-    if (game.workMeter >= game.workThreshold && !game.officeDoorUnlocked) {
-      game.officeDoorUnlocked = true;
-      game.state = 'interact';
-      game.dialogueQueue = [];
-      game.currentDialogue = "You've done enough work! The office door is now UNLOCKED. But keep working to build a buffer — your progress decays over time!";
-    }
-    player.walking = false;
-    return;
-  }
   game.isWorking = false;
 
   if (player.isHiding) {
@@ -759,3 +714,116 @@ function fireSalt() {
   });
 }
 
+
+// --- WORK MINI-GAME ---
+function generateWorkQuestion() {
+  const ops = ['+', '-', '*'];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  let a, b, answer;
+  if (op === '+') {
+    a = Math.floor(Math.random() * 50) + 10;
+    b = Math.floor(Math.random() * 50) + 10;
+    answer = a + b;
+  } else if (op === '-') {
+    a = Math.floor(Math.random() * 50) + 30;
+    b = Math.floor(Math.random() * 30) + 5;
+    answer = a - b;
+  } else {
+    a = Math.floor(Math.random() * 12) + 2;
+    b = Math.floor(Math.random() * 12) + 2;
+    answer = a * b;
+  }
+
+  const text = a + ' ' + op + ' ' + b + ' = ?';
+
+  // Generate 4 options including the correct answer
+  const options = [answer];
+  while (options.length < 4) {
+    let wrong;
+    if (op === '*') {
+      wrong = answer + (Math.floor(Math.random() * 20) - 10);
+    } else {
+      wrong = answer + (Math.floor(Math.random() * 30) - 15);
+    }
+    if (wrong !== answer && wrong >= 0 && !options.includes(wrong)) {
+      options.push(wrong);
+    }
+  }
+  // Shuffle options
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = options[i]; options[i] = options[j]; options[j] = tmp;
+  }
+
+  // Pick a funny task label
+  const tasks = [
+    'Updating spreadsheet nobody reads...',
+    'Replying all to a chain of 47 emails...',
+    'Renaming final_v2_FINAL_actual.docx...',
+    'Filling in timesheet... creatively...',
+    'Pretending to understand the Jira board...',
+    'Moving tickets to "In Progress"...',
+    'Googling error message on Stack Overflow...',
+    'Copy-pasting from ChatGPT...',
+    'Making the logo bigger...',
+    'Doing "synergy" on the "deliverables"...',
+    'Aligning boxes in PowerPoint...',
+    'Writing unit tests... LOL just kidding...',
+    'Calculating how long until lunch...',
+    'Wondering who approved this codebase...',
+  ];
+
+  game.workQuestion = {
+    text: text,
+    answer: answer,
+    options: options,
+    selectedIndex: 0,
+    timer: 5,
+    maxTimer: 5,
+    answered: false,
+    correct: false,
+    resultTimer: 0,
+    taskLabel: tasks[Math.floor(Math.random() * tasks.length)],
+  };
+  game.state = 'workScreen';
+}
+
+function answerWorkQuestion() {
+  if (!game.workQuestion || game.workQuestion.answered) return;
+  const wq = game.workQuestion;
+  wq.answered = true;
+  if (wq.options[wq.selectedIndex] === wq.answer) {
+    wq.correct = true;
+    const bonus = game.energyDrinkWorkTimer > 0 ? 30 : 10;
+    game.workMeter = Math.min(game.maxWork, game.workMeter + bonus);
+    // Check door unlock
+    if (game.workMeter >= game.workThreshold && !game.officeDoorUnlocked) {
+      game.officeDoorUnlocked = true;
+    }
+  } else {
+    wq.correct = false;
+    game.toiletMeter = Math.min(game.maxToilet, game.toiletMeter + 20);
+  }
+  wq.resultTimer = 1.2; // show result for 1.2 seconds
+}
+
+function updateWorkScreen(dt) {
+  if (!game.workQuestion) return;
+  const wq = game.workQuestion;
+  if (wq.answered) {
+    wq.resultTimer -= dt;
+    if (wq.resultTimer <= 0) {
+      game.workQuestion = null;
+      game.state = 'playing';
+    }
+    return;
+  }
+  wq.timer -= dt;
+  if (wq.timer <= 0) {
+    // Time ran out — counts as wrong
+    wq.answered = true;
+    wq.correct = false;
+    game.toiletMeter = Math.min(game.maxToilet, game.toiletMeter + 20);
+    wq.resultTimer = 1.2;
+  }
+}

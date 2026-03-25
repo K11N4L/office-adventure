@@ -386,3 +386,150 @@ function drawPauseMenu() {
   ctx.fillText('[W/S] Select  |  [Enter] Confirm  |  [ESC] Resume', canvas.width / 2, my + mh - 15);
   ctx.textAlign = 'left';
 }
+
+// --- WORK SCREEN (BRAYDEN WORK) ---
+function drawWorkScreen() {
+  if (!game.workQuestion) return;
+  const wq = game.workQuestion;
+  const W = canvas.width, H = canvas.height;
+
+  // Dark overlay
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Monitor frame
+  const mw = 440, mh = 320;
+  const mx = (W - mw) / 2, my = (H - mh) / 2 - 10;
+
+  // Outer bezel (dark grey)
+  drawPixelRect(mx - 6, my - 6, mw + 12, mh + 12, '#2a2a2a');
+  // Screen background
+  drawPixelRect(mx, my, mw, mh, '#0a1a2a');
+  // Screen glow border
+  ctx.strokeStyle = '#3a5a8a'; ctx.lineWidth = 2;
+  ctx.strokeRect(mx, my, mw, mh);
+  ctx.lineWidth = 1;
+  // Monitor stand
+  drawPixelRect(mx + mw/2 - 30, my + mh + 6, 60, 8, '#2a2a2a');
+  drawPixelRect(mx + mw/2 - 50, my + mh + 14, 100, 5, '#333');
+
+  ctx.textAlign = 'center';
+
+  // Title bar
+  drawPixelRect(mx + 4, my + 4, mw - 8, 22, '#1a3a5a');
+  ctx.fillStyle = '#6ab4ff'; ctx.font = 'bold 12px monospace';
+  ctx.fillText('BRAYDEN WORK v2.0 - ' + wq.taskLabel, W / 2, my + 19);
+
+  // Close button on title bar
+  drawPixelRect(mx + mw - 24, my + 6, 18, 18, '#cc3333');
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 11px monospace';
+  ctx.fillText('X', mx + mw - 15, my + 19);
+
+  if (!wq.answered) {
+    // Timer bar
+    const timerRatio = Math.max(0, wq.timer / wq.maxTimer);
+    const timerW = mw - 40;
+    const timerX = mx + 20, timerY = my + 36;
+    drawPixelRect(timerX, timerY, timerW, 10, '#1a1a2a');
+    const timerColor = timerRatio > 0.5 ? '#4a9a4a' : timerRatio > 0.25 ? '#ccaa22' : '#cc3333';
+    drawPixelRect(timerX, timerY, timerW * timerRatio, 10, timerColor);
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+    ctx.strokeRect(timerX, timerY, timerW, 10);
+
+    // Timer text
+    ctx.fillStyle = timerColor; ctx.font = 'bold 11px monospace';
+    ctx.fillText(Math.ceil(wq.timer) + 's remaining', W / 2, timerY + 24);
+
+    // Question
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px monospace';
+    ctx.fillText(wq.text, W / 2, my + 105);
+
+    // Subtitle
+    ctx.fillStyle = '#6a8aaa'; ctx.font = '11px monospace';
+    ctx.fillText('Quick maths! Solve to earn work progress.', W / 2, my + 128);
+
+    // Options in 2x2 grid
+    const gridX = mx + 40, gridY = my + 148;
+    const optW = 170, optH = 40, gap = 16;
+    for (let i = 0; i < 4; i++) {
+      const col = i % 2, row = Math.floor(i / 2);
+      const ox = gridX + col * (optW + gap);
+      const oy = gridY + row * (optH + gap);
+      const selected = i === wq.selectedIndex;
+
+      if (selected) {
+        drawPixelRect(ox, oy, optW, optH, '#2a4a6a');
+        ctx.strokeStyle = '#ffdd44'; ctx.lineWidth = 2;
+        ctx.strokeRect(ox, oy, optW, optH);
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 18px monospace';
+      } else {
+        drawPixelRect(ox, oy, optW, optH, '#1a2a3a');
+        ctx.strokeStyle = '#3a5a7a'; ctx.lineWidth = 1;
+        ctx.strokeRect(ox, oy, optW, optH);
+        ctx.fillStyle = '#aaccee'; ctx.font = '18px monospace';
+      }
+      ctx.fillText(wq.options[i], ox + optW / 2, oy + optH / 2 + 6);
+    }
+
+    // Controls hint
+    ctx.fillStyle = '#4a6a8a'; ctx.font = '10px monospace';
+    ctx.fillText('[W/A/S/D] Select  |  [E/Enter] Answer  |  [ESC] Quit', W / 2, my + mh - 14);
+
+    // Work meter mini display
+    const wmx = mx + 20, wmy = my + mh - 38;
+    ctx.fillStyle = '#4a6a8a'; ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Work: ' + Math.floor(game.workMeter) + '/' + game.workThreshold + ' (door) | ' + Math.floor(game.workMeter) + '/' + game.maxWork + ' (max)', wmx, wmy);
+    ctx.textAlign = 'center';
+
+  } else {
+    // Show result
+    if (wq.correct) {
+      ctx.fillStyle = '#4ade80'; ctx.font = 'bold 28px monospace';
+      ctx.fillText('CORRECT!', W / 2, my + 100);
+
+      const bonus = game.energyDrinkWorkTimer > 0 ? 30 : 10;
+      ctx.fillStyle = '#88ddaa'; ctx.font = 'bold 16px monospace';
+      ctx.fillText('+' + bonus + ' Work Progress!', W / 2, my + 135);
+
+      if (game.energyDrinkWorkTimer > 0) {
+        ctx.fillStyle = '#2a8a2a'; ctx.font = '12px monospace';
+        ctx.fillText('ENERGY BOOST ACTIVE - Triple reward!', W / 2, my + 160);
+      }
+
+      // Fun message
+      ctx.fillStyle = '#6a8aaa'; ctx.font = '12px monospace';
+      const msgs = [
+        'Your boss would be proud. If they cared.',
+        'Productivity levels: suspicious.',
+        'Excel would be impressed.',
+        'That spreadsheet just updated itself.',
+        'Promoted to Senior Spreadsheet Analyst.',
+      ];
+      ctx.fillText(msgs[Math.floor(game.frameCount / 30) % msgs.length], W / 2, my + 195);
+    } else {
+      ctx.fillStyle = '#ff6666'; ctx.font = 'bold 28px monospace';
+      ctx.fillText(wq.timer <= 0 ? 'TOO SLOW!' : 'WRONG!', W / 2, my + 100);
+
+      ctx.fillStyle = '#ffaaaa'; ctx.font = 'bold 16px monospace';
+      ctx.fillText('+20 Toilet Urgency!', W / 2, my + 135);
+
+      ctx.fillStyle = '#ff8888'; ctx.font = '14px monospace';
+      ctx.fillText('Answer was: ' + wq.answer, W / 2, my + 165);
+
+      // Fun fail message
+      ctx.fillStyle = '#8a6a6a'; ctx.font = '12px monospace';
+      const msgs = [
+        'Brayden needs a calculator...',
+        'Maybe try the pub instead?',
+        'Your maths teacher is crying somewhere.',
+        'That curry is catching up to you...',
+        'The spreadsheet has errors. Like you.',
+      ];
+      ctx.fillText(msgs[Math.floor(game.frameCount / 30) % msgs.length], W / 2, my + 195);
+    }
+  }
+
+  ctx.textAlign = 'left';
+}

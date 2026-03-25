@@ -7,13 +7,15 @@ const game = {
   time: 600,
   maxTime: 600,
   workMeter: 0,
-  maxWork: 100,
+  maxWork: 300,
   workThreshold: 60,
   workFillRate: 5,
   workDecayRate: 0.8, // work meter decays per second when not working
   isWorking: false,
   workTask: '',
   workTaskTimer: 0,
+  // Work mini-game
+  workQuestion: null, // { text, answer, options, selectedIndex, timer, maxTimer, answered, correct }
   toiletMeter: 0,
   maxToilet: 100,
   toiletRiseRate: 0.28,
@@ -162,6 +164,28 @@ window.addEventListener('keydown', e => {
         game.questLogIndex = 0;
       } else {
         resetGame();
+      }
+    }
+  } else if (st === 'workScreen') {
+    if (game.workQuestion && !game.workQuestion.answered) {
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+        game.workQuestion.selectedIndex = (game.workQuestion.selectedIndex - 1 + 4) % 4;
+      }
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+        game.workQuestion.selectedIndex = (game.workQuestion.selectedIndex + 1) % 4;
+      }
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        game.workQuestion.selectedIndex = (game.workQuestion.selectedIndex - 1 + 4) % 4;
+      }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        game.workQuestion.selectedIndex = (game.workQuestion.selectedIndex + 1) % 4;
+      }
+      if (e.code === 'Enter' || e.code === 'KeyE' || e.code === 'Space') {
+        answerWorkQuestion();
+      }
+      if (e.code === 'Escape') {
+        game.workQuestion = null;
+        game.state = 'playing';
       }
     }
   } else if (st === 'questLog') {

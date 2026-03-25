@@ -17,6 +17,7 @@ function gameLoop(timestamp) {
     case 'vendorMenu':
     case 'dialogueChoice':
     case 'questLog':
+    case 'workScreen':
       if (game.state === 'playing') {
         updateRoomTransition(dt);
         updatePlayer(dt);
@@ -28,6 +29,11 @@ function gameLoop(timestamp) {
         updateQuips(dt);
         updateRandomEvents(dt);
         updateEmailNotifications(dt);
+      }
+      if (game.state === 'workScreen') {
+        updateWorkScreen(dt);
+        // Still tick timers (toilet still rises while working!)
+        updateTimers(dt);
       }
       drawRoom();
       const room = rooms[game.currentRoom];
@@ -43,13 +49,13 @@ function gameLoop(timestamp) {
       drawSpeechBubbles();
       drawEventOverlay();
       drawEmailNotifications();
-      if (game.isWorking) drawWorkOverlay();
       if (game.state === 'interact') drawDialogue();
       if (game.state === 'dialogueChoice') drawDialogueChoice();
       if (game.state === 'fridgeMenu') drawFridgeMenu();
       if (game.state === 'npcMenu') drawNpcMenu();
       if (game.state === 'vendorMenu') drawVendorMenu();
       if (game.state === 'questLog') drawQuestLog();
+      if (game.state === 'workScreen') drawWorkScreen();
       if (game.state === 'paused') drawPauseMenu();
       drawRoomTransition();
       break;

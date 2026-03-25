@@ -226,7 +226,7 @@ function drawInteractionHints() {
   if (type === 'computer') {
     ctx.fillStyle = 'rgba(100, 200, 255, 0.8)';
     ctx.font = 'bold 11px monospace';
-    const workHint = game.officeDoorUnlocked ? '[Hold E] Build buffer' : '[Hold E] Work';
+    const workHint = game.officeDoorUnlocked ? '[E] Build buffer' : '[E] Brayden Work';
     ctx.fillText(workHint, player.x - 12, player.y - 8);
   }
 

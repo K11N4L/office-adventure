@@ -53,7 +53,7 @@ function tryInteract() {
   }
 
   if (type === 'computer') {
-    // Don't open dialogue — holding E handles working directly in updatePlayer
+    generateWorkQuestion();
     return;
   }
 
