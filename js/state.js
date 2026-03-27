@@ -11,9 +11,6 @@ const game = {
   workThreshold: 60,
   workFillRate: 5,
   workDecayRate: 0.8, // work meter decays per second when not working
-  isWorking: false,
-  workTask: '',
-  workTaskTimer: 0,
   // Work mini-game
   workQuestion: null, // { text, answer, options, selectedIndex, timer, maxTimer, answered, correct }
   toiletMeter: 0,
@@ -143,6 +140,8 @@ window.addEventListener('keydown', e => {
     if (e.code === 'KeyE') tryInteract();
     if (e.code === 'Digit1') useItem(0);
     if (e.code === 'Digit2') useItem(1);
+    if (e.code === 'Digit3') useItem(2);
+    if (e.code === 'Digit4') useItem(3);
     if (e.code === 'Space' && game.saltAmmo > 0) fireSalt();
     if (e.code === 'KeyH') toggleHiding();
     if (e.code === 'KeyQ') throwPaperBall();

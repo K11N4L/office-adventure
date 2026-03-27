@@ -5,7 +5,6 @@ function startGame() {
   game.workMeter = 0;
   game.toiletMeter = 0;
   game.officeDoorUnlocked = false;
-  game.isWorking = false;
   game.saltAmmo = 0;
   game.saltProjectiles = [];
   game.fridgeItems = ['salt', 'beer', 'energy_drink'];
@@ -223,6 +222,8 @@ function toggleHiding() {
 
 
 function throwPaperBall() {
+  if (!game.paperBallAmmo || game.paperBallAmmo <= 0) return;
+  game.paperBallAmmo--;
   const dirs = { up: {dx:0,dy:-1}, down: {dx:0,dy:1}, left: {dx:-1,dy:0}, right: {dx:1,dy:0} };
   const d = dirs[player.facing] || dirs.down;
   game.paperBalls.push({
@@ -292,8 +293,6 @@ function updatePlayer(dt) {
   // Block movement during room transitions
   if (game.roomTransition) return;
 
-  game.isWorking = false;
-
   if (player.isHiding) {
     player.walking = false;
     return;
@@ -360,7 +359,10 @@ function updatePlayer(dt) {
 
   // Check win tiles first (highest priority - immediate win)
   if (room.winTiles) {
-    for (const wt of room.winTiles) {
+    for (let i = 0; i < room.winTiles.length; i++) {
+      // Skip occupied cubicle
+      if (game.occupiedCubicle >= 0 && i === game.occupiedCubicle) continue;
+      const wt = room.winTiles[i];
       const wtx = wt.x * T, wty = wt.y * T;
       if (Math.hypot(player.x + player.w/2 - wtx - T/2, player.y + player.h/2 - wty - T/2) < T) {
         game.state = 'win';
@@ -466,7 +468,7 @@ function hasLineOfSight(x1, y1, x2, y2) {
     const cy = y1 + (y2 - y1) * t;
     const gx = Math.floor(cx / T), gy = Math.floor(cy / T);
     if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) return false;
-    if (room.grid[gy][gx] === TILE_WALL) return false;
+    if (isSolid(room.grid[gy][gx])) return false;
   }
   return true;
 }
@@ -505,7 +507,7 @@ function updateEnemies(dt) {
         player.y + player.h / 2 - enemy.y - T * 0.4
       );
 
-      if (game.isWorking) {
+      if (game.state === 'workScreen') {
         if (enemy.alertState === 'hunting') enemy.alertState = 'suspicious';
         continue;
       }
@@ -656,7 +658,7 @@ function updateSaltProjectiles(dt) {
 
 
 function updateTimers(dt) {
-  if (game.state !== 'playing') return;
+  if (game.state !== 'playing' && game.state !== 'workScreen') return;
 
   game.time -= dt;
   if (game.time <= 0) {
@@ -677,7 +679,7 @@ function updateTimers(dt) {
   }
 
   // Work meter decay - slowly drops when not working
-  if (!game.isWorking && game.workMeter > 0) {
+  if (game.state !== 'workScreen' && game.workMeter > 0 && game.mode !== 'freeroam') {
     game.workMeter = Math.max(0, game.workMeter - game.workDecayRate * dt);
     // Re-lock door if work drops below threshold
     if (game.workMeter < game.workThreshold && game.officeDoorUnlocked) {

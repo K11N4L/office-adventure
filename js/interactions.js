@@ -61,7 +61,7 @@ function tryInteract() {
     game.state = 'interact';
     game.dialogueQueue = [];
     const pct = Math.floor(game.workMeter);
-    game.currentDialogue = `The door is LOCKED! You need to do more work first. (${pct}/${game.workThreshold}%) Hold [E] near a computer to work.`;
+    game.currentDialogue = `The door is LOCKED! You need to do more work first. (${pct}/${game.workThreshold}%) Press [E] near a computer to work.`;
     return;
   }
 
@@ -168,9 +168,24 @@ function tryInteract() {
     if (data.interactType === 'greg_story') {
       if (!data.storyActive) {
         data.storyActive = true;
-        game.time -= 30;
         game.state = 'interact';
-        game.dialogueQueue = [...data.dialogue];
+        game.dialogueQueue = [
+          ...data.dialogue,
+          {
+            prompt: "Greg is still talking... what do you do?",
+            choices: [
+              { label: "Politely listen", next: [
+                "Greg: ...and THAT'S why you never trust a man with two watches.",
+                "*Greg talked your ear off. Lost 30 seconds!*"
+              ], effect: { timeLoss: 30 } },
+              { label: "Walk away mid-story", next: [
+                "Brayden: Sorry Greg, gotta run!",
+                "Greg: ...but I hadn't got to the punchline yet!",
+                "*You escaped but still lost 10 seconds.*"
+              ], effect: { timeLoss: 10 } }
+            ]
+          }
+        ];
         game.currentDialogue = game.dialogueQueue.shift();
       }
       return;
@@ -257,10 +272,24 @@ function tryInteract() {
       player.inventory[emptySlot] = { ...data };
       data.collected = true;
       player.canInteract = null;
+      // Auto-complete quests with giver 'Survival' (L1/L2 quests)
+      if (game.quests) {
+        const autoQuest = game.quests.find(q => !q.completed && q.giver === 'Survival' && q.itemNeeded === data.itemType);
+        if (autoQuest) {
+          autoQuest.completed = true;
+          game.state = 'interact';
+          game.dialogueQueue = [
+            "*Quest Complete: " + autoQuest.name + "!*",
+            "*" + autoQuest.rewardDesc + "*",
+          ];
+          game.currentDialogue = game.dialogueQueue.shift();
+        }
+      }
     } else {
       game.state = 'interact';
       game.dialogueQueue = [];
-      game.currentDialogue = "Your pockets are full! You can only carry 2 items. Use one first with [1] or [2].";
+      const maxSlot = player.inventory.length;
+      game.currentDialogue = "Your pockets are full! You can only carry " + maxSlot + " items. Use one first with [1]-[" + maxSlot + "].";
     }
     return;
   }

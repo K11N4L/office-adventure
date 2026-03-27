@@ -95,7 +95,7 @@ function drawPlayer() {
   ctx.fillText('BRAYDEN', px + w/2, bY - 8);
   ctx.textAlign = 'left';
 
-  if (game.isWorking) {
+  if (game.state === 'workScreen') {
     ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
     ctx.font = 'bold 10px monospace';
     const dots = '.'.repeat((Math.floor(game.frameCount / 15) % 3) + 1);

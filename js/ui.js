@@ -54,14 +54,18 @@ function drawUI() {
     ctx.fillText(`SALT: ${game.saltAmmo}/${game.saltMax} [SPACE]`, 8, 42);
   }
 
-  drawPixelRect(canvas.width / 2 - 60, canvas.height - 44, 120, 40, C.uiBg);
+  const invSlots = player.inventory.length;
+  const slotW = 50, slotGap = 8;
+  const invTotalW = invSlots * slotW + (invSlots - 1) * slotGap + 12;
+  const invX = canvas.width / 2 - invTotalW / 2;
+  drawPixelRect(invX, canvas.height - 44, invTotalW, 40, C.uiBg);
   ctx.strokeStyle = C.uiBorder;
-  ctx.strokeRect(canvas.width / 2 - 60, canvas.height - 44, 120, 40);
-  for (let i = 0; i < 2; i++) {
-    const slotX = canvas.width / 2 - 54 + i * 58, slotY = canvas.height - 40;
-    drawPixelRect(slotX, slotY, 50, 32, '#2a2a2a');
+  ctx.strokeRect(invX, canvas.height - 44, invTotalW, 40);
+  for (let i = 0; i < invSlots; i++) {
+    const slotX = invX + 6 + i * (slotW + slotGap), slotY = canvas.height - 40;
+    drawPixelRect(slotX, slotY, slotW, 32, '#2a2a2a');
     ctx.strokeStyle = '#555';
-    ctx.strokeRect(slotX, slotY, 50, 32);
+    ctx.strokeRect(slotX, slotY, slotW, 32);
     ctx.fillStyle = '#666'; ctx.font = '9px monospace';
     ctx.fillText(`[${i + 1}]`, slotX + 2, slotY + 10);
     if (player.inventory[i]) {
@@ -73,7 +77,8 @@ function drawUI() {
 
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = '9px monospace';
-  ctx.fillText('WASD:Move  SHIFT:Sneak  E:Interact  1/2:Use Item  SPACE:Salt', 8, canvas.height - 6);
+  const itemKeys = invSlots > 2 ? '1-4:Use Item' : '1/2:Use Item';
+  ctx.fillText('WASD:Move  SHIFT:Sneak  E:Interact  ' + itemKeys + '  SPACE:Salt', 8, canvas.height - 6);
 
   // Free roam quest tracker
   if (game.mode === 'freeroam') {

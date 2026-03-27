@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Adventure - DEBUG MODE</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    font-family: monospace;
+    color: #ccc;
+    overflow-y: auto;
+  }
+  #wrapper {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    max-width: 1400px;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 3px solid #333;
+    flex-shrink: 0;
+  }
+  #debugPanel {
+    width: 380px;
+    background: #1a1a2a;
+    border: 2px solid #333;
+    padding: 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-y: auto;
+    max-height: 600px;
+  }
+  #debugPanel h2 { color: #ffdd44; font-size: 14px; margin: 8px 0 4px 0; border-bottom: 1px solid #333; }
+  #debugPanel h2:first-child { margin-top: 0; }
+  .debug-row { display: flex; justify-content: space-between; padding: 1px 4px; }
+  .debug-row:hover { background: rgba(255,255,255,0.05); }
+  .debug-label { color: #888; }
+  .debug-value { color: #6ab4ff; font-weight: bold; }
+  .debug-value.warn { color: #ffaa44; }
+  .debug-value.crit { color: #ff4444; }
+  .debug-value.good { color: #4ade80; }
+  #debugLog {
+    width: 380px;
+    background: #0a0a1a;
+    border: 2px solid #333;
+    padding: 8px;
+    font-size: 10px;
+    line-height: 1.4;
+    overflow-y: auto;
+    max-height: 600px;
+  }
+  #debugLog .log-entry { padding: 2px 0; border-bottom: 1px solid #1a1a2a; }
+  .log-info { color: #6ab4ff; }
+  .log-warn { color: #ffaa44; }
+  .log-error { color: #ff4444; }
+  .log-event { color: #c084fc; }
+  .log-time { color: #555; font-size: 9px; }
+  #controls {
+    background: #1a1a2a;
+    border: 2px solid #333;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  #controls button {
+    background: #2a3a5a;
+    color: #ccc;
+    border: 1px solid #4a6a9a;
+    padding: 4px 10px;
+    margin: 2px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 11px;
+  }
+  #controls button:hover { background: #3a5a8a; color: #fff; }
+  #controls button.active { background: #4a8a4a; border-color: #6aba6a; }
+  .section-label { color: #ffdd44; font-size: 11px; font-weight: bold; margin: 6px 0 3px 0; }
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <!-- Game Canvas -->
+  <div>
+    <div id="controls">
+      <div class="section-label">QUICK ACTIONS</div>
+      <button onclick="debugStartLevel(1)">Start Lvl 1</button>
+      <button onclick="debugStartLevel(2)">Start Lvl 2</button>
+      <button onclick="debugStartLevel(3)">Start Free Roam</button>
+      <button onclick="debugResetGame()">Reset</button>
+      <br>
+      <button onclick="debugSetWork(100)">Work=100%</button>
+      <button onclick="debugSetWork(60)">Work=60%</button>
+      <button onclick="debugSetWork(0)">Work=0%</button>
+      <button onclick="debugUnlockDoor()">Unlock Door</button>
+      <br>
+      <button onclick="debugSetToilet(0)">Toilet=0</button>
+      <button onclick="debugSetToilet(50)">Toilet=50</button>
+      <button onclick="debugSetToilet(90)">Toilet=90</button>
+      <button onclick="debugAddTime(120)">+2 Min</button>
+      <br>
+      <button onclick="debugTeleportRoom('office')">→ Office</button>
+      <button onclick="debugTeleportRoom('lobby')">→ Lobby</button>
+      <button onclick="debugTeleportRoom('toiletHall')">→ Hall</button>
+      <button onclick="debugTeleportRoom('stairwell')">→ Stairs</button>
+      <button onclick="debugTeleportRoom('toiletArea')">→ Toilet</button>
+      <button onclick="debugTeleportRoom('pub')">→ Pub</button>
+      <br>
+      <button onclick="debugKillEnemies()">Kill Enemies</button>
+      <button onclick="debugReviveEnemies()">Revive Enemies</button>
+      <button onclick="debugGiveSalt()">Give Salt (10)</button>
+      <button onclick="debugGiveGold(50)">+50 Gold</button>
+      <br>
+      <button onclick="debugGiveItem('coffee')">Give Coffee</button>
+      <button onclick="debugGiveItem('headphones')">Give Headphones</button>
+      <button onclick="debugGiveItem('imodium')">Give Imodium</button>
+      <button onclick="debugGiveItem('energy_drink')">Give E-Drink</button>
+      <br>
+      <div class="section-label">TOGGLES</div>
+      <button id="btnGodMode" onclick="debugToggleGodMode()">God Mode: OFF</button>
+      <button id="btnFreezeTime" onclick="debugToggleFreezeTime()">Freeze Time: OFF</button>
+      <button id="btnShowGrid" onclick="debugToggleGrid()">Grid: OFF</button>
+      <button id="btnShowHitboxes" onclick="debugToggleHitboxes()">Hitboxes: OFF</button>
+      <button id="btnSlowMo" onclick="debugToggleSlowMo()">Slow-Mo: OFF</button>
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+  </div>
+
+  <!-- Debug Info Panel -->
+  <div>
+    <div id="debugPanel"></div>
+  </div>
+
+  <!-- Event Log -->
+  <div>
+    <div id="debugLog">
+      <div class="section-label">EVENT LOG</div>
+    </div>
+  </div>
+</div>
+
+<!-- Load all game scripts -->
+<script src="js/constants.js"></script>
+<script src="js/state.js"></script>
+<script src="js/rooms.js"></script>
+<script src="js/collision.js"></script>
+<script src="js/rendering.js"></script>
+<script src="js/player.js"></script>
+<script src="js/npcs.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/items.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/interactions.js"></script>
+<script src="js/screens.js"></script>
+<script src="js/effects.js"></script>
+
+<!-- DEBUG OVERLAY & TOOLS -->
+<script>
+// ===== DEBUG STATE =====
+const DEBUG = {
+  godMode: false,
+  freezeTime: false,
+  showGrid: false,
+  showHitboxes: false,
+  slowMo: false,
+  log: [],
+  maxLog: 200,
+  frameCounter: 0,
+  fps: 0,
+  fpsAccum: 0,
+  fpsCount: 0,
+  lastFpsUpdate: 0,
+  stateChanges: 0,
+  lastState: '',
+  lastRoom: '',
+};
+
+// ===== DEBUG LOGGING =====
+function debugLog(msg, type = 'info') {
+  const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const frame = game.frameCount;
+  DEBUG.log.unshift({ msg, type, time, frame });
+  if (DEBUG.log.length > DEBUG.maxLog) DEBUG.log.pop();
+}
+
+// ===== QUICK ACTIONS =====
+function debugStartLevel(lvl) {
+  game.levelSelectIndex = lvl === 3 ? 2 : lvl - 1;
+  game.level = lvl;
+  startGame();
+  debugLog(`Started Level ${lvl}`, 'event');
+}
+
+function debugResetGame() {
+  resetGame();
+  debugLog('Game reset to title', 'event');
+}
+
+function debugSetWork(pct) {
+  game.workMeter = (pct / 100) * game.maxWork;
+  if (game.workMeter >= game.workThreshold) game.officeDoorUnlocked = true;
+  else game.officeDoorUnlocked = false;
+  debugLog(`Work set to ${pct}% (${Math.floor(game.workMeter)}/${game.maxWork})`, 'info');
+}
+
+function debugSetToilet(val) {
+  game.toiletMeter = val;
+  debugLog(`Toilet set to ${val}`, 'info');
+}
+
+function debugAddTime(secs) {
+  game.time += secs;
+  debugLog(`Added ${secs}s to timer`, 'info');
+}
+
+function debugUnlockDoor() {
+  game.officeDoorUnlocked = true;
+  game.workMeter = Math.max(game.workMeter, game.workThreshold);
+  debugLog('Door unlocked, work set to threshold', 'info');
+}
+
+function debugTeleportRoom(roomName) {
+  if (!rooms[roomName]) { debugLog(`Room "${roomName}" not found!`, 'error'); return; }
+  game.currentRoom = roomName;
+  const r = rooms[roomName];
+  if (r.playerStart) { player.x = r.playerStart.x; player.y = r.playerStart.y; }
+  else { player.x = 7 * T; player.y = 5 * T; }
+  player.canInteract = null;
+  player.vx = 0; player.vy = 0;
+  game.roomTransition = null;
+  if (game.state === 'title') { debugStartLevel(1); }
+  debugLog(`Teleported to ${roomName}`, 'event');
+}
+
+function debugKillEnemies() {
+  const room = rooms[game.currentRoom];
+  if (room.enemies) { room.enemies.forEach(e => { e.dead = true; e.hp = 0; }); }
+  debugLog(`Killed all enemies in ${game.currentRoom}`, 'event');
+}
+
+function debugReviveEnemies() {
+  const room = rooms[game.currentRoom];
+  if (room.enemies) { room.enemies.forEach(e => { e.dead = false; e.hp = e.maxHp; e.alertState = 'idle'; }); }
+  debugLog(`Revived enemies in ${game.currentRoom}`, 'event');
+}
+
+function debugGiveSalt() {
+  game.saltAmmo = game.saltMax;
+  debugLog('Salt ammo filled to ' + game.saltMax, 'info');
+}
+
+function debugGiveGold(amount) {
+  game.gold += amount;
+  debugLog(`+${amount} gold (total: ${game.gold})`, 'info');
+}
+
+function debugGiveItem(itemType) {
+  const slot = player.inventory.indexOf(null);
+  if (slot === -1) { debugLog('Inventory full!', 'warn'); return; }
+  const names = { coffee: 'Coffee', headphones: 'Headphones', imodium: 'Imodium', energy_drink: 'E-Drink',
+                   pub_snacks: 'Pub Snacks', beer_mat: 'Beer Mat', dart: 'Dart' };
+  player.inventory[slot] = { name: names[itemType] || itemType, itemType: itemType, type: 'pickup' };
+  debugLog(`Gave ${itemType} to slot ${slot + 1}`, 'info');
+}
+
+// ===== TOGGLES =====
+function debugToggleGodMode() {
+  DEBUG.godMode = !DEBUG.godMode;
+  document.getElementById('btnGodMode').textContent = 'God Mode: ' + (DEBUG.godMode ? 'ON' : 'OFF');
+  document.getElementById('btnGodMode').classList.toggle('active', DEBUG.godMode);
+  debugLog('God Mode ' + (DEBUG.godMode ? 'ON' : 'OFF'), 'event');
+}
+
+function debugToggleFreezeTime() {
+  DEBUG.freezeTime = !DEBUG.freezeTime;
+  document.getElementById('btnFreezeTime').textContent = 'Freeze Time: ' + (DEBUG.freezeTime ? 'ON' : 'OFF');
+  document.getElementById('btnFreezeTime').classList.toggle('active', DEBUG.freezeTime);
+  debugLog('Freeze Time ' + (DEBUG.freezeTime ? 'ON' : 'OFF'), 'event');
+}
+
+function debugToggleGrid() {
+  DEBUG.showGrid = !DEBUG.showGrid;
+  document.getElementById('btnShowGrid').textContent = 'Grid: ' + (DEBUG.showGrid ? 'ON' : 'OFF');
+  document.getElementById('btnShowGrid').classList.toggle('active', DEBUG.showGrid);
+}
+
+function debugToggleHitboxes() {
+  DEBUG.showHitboxes = !DEBUG.showHitboxes;
+  document.getElementById('btnShowHitboxes').textContent = 'Hitboxes: ' + (DEBUG.showHitboxes ? 'ON' : 'OFF');
+  document.getElementById('btnShowHitboxes').classList.toggle('active', DEBUG.showHitboxes);
+}
+
+function debugToggleSlowMo() {
+  DEBUG.slowMo = !DEBUG.slowMo;
+  document.getElementById('btnSlowMo').textContent = 'Slow-Mo: ' + (DEBUG.slowMo ? 'ON' : 'OFF');
+  document.getElementById('btnSlowMo').classList.toggle('active', DEBUG.slowMo);
+  debugLog('Slow-Mo ' + (DEBUG.slowMo ? 'ON (0.25x)' : 'OFF'), 'event');
+}
+
+// ===== MONKEY-PATCHES FOR DEBUG FEATURES =====
+
+// Patch updateTimers to support freeze time & god mode
+const _origUpdateTimers = updateTimers;
+updateTimers = function(dt) {
+  if (DEBUG.freezeTime) {
+    // Only update item timers, not game time or toilet
+    if (game.energyDrinkWorkTimer > 0) game.energyDrinkWorkTimer -= dt;
+    if (game.energyDrinkToiletTimer > 0) game.energyDrinkToiletTimer -= dt;
+    if (player.imodiumTimer > 0) player.imodiumTimer -= dt;
+    return;
+  }
+  if (DEBUG.godMode) {
+    // Run original but clamp toilet back
+    const savedToilet = game.toiletMeter;
+    _origUpdateTimers(dt);
+    game.toiletMeter = Math.min(savedToilet, 50); // cap at 50 in god mode
+    return;
+  }
+  _origUpdateTimers(dt);
+};
+
+// ===== DEBUG DRAW OVERLAY =====
+function debugDrawOverlay() {
+  if (game.state === 'title') return;
+
+  // Grid overlay
+  if (DEBUG.showGrid) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * T, 0); ctx.lineTo(x * T, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * T); ctx.lineTo(canvas.width, y * T); ctx.stroke();
+    }
+    // Tile coordinates
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '8px monospace';
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        ctx.fillText(`${x},${y}`, x * T + 2, y * T + 10);
+      }
+    }
+  }
+
+  // Hitboxes
+  if (DEBUG.showHitboxes) {
+    // Player hitbox
+    ctx.strokeStyle = '#0f0'; ctx.lineWidth = 1;
+    ctx.strokeRect(player.x, player.y, player.w, player.h);
+    // Player center
+    ctx.fillStyle = '#0f0';
+    ctx.fillRect(player.x + player.w/2 - 2, player.y + player.h/2 - 2, 4, 4);
+
+    const room = rooms[game.currentRoom];
+    // Enemy hitboxes
+    if (room.enemies) {
+      for (const e of room.enemies) {
+        if (e.dead) continue;
+        ctx.strokeStyle = e.alertState === 'hunting' ? '#f00' : e.alertState === 'suspicious' ? '#ff0' : '#f80';
+        ctx.strokeRect(e.x, e.y, T * 0.7, T * 0.8);
+        // Alert state label
+        ctx.fillStyle = ctx.strokeStyle; ctx.font = '9px monospace';
+        ctx.fillText(e.alertState || 'patrol', e.x, e.y - 2);
+        // Line of sight
+        if (e.type === 'zombie') {
+          const canSee = hasLineOfSight(e.x, e.y, player.x + player.w/2, player.y + player.h/2);
+          ctx.strokeStyle = canSee ? 'rgba(255,0,0,0.5)' : 'rgba(100,100,100,0.2)';
+          ctx.beginPath(); ctx.moveTo(e.x + T*0.35, e.y + T*0.4);
+          ctx.lineTo(player.x + player.w/2, player.y + player.h/2); ctx.stroke();
+        }
+      }
+    }
+    // NPC hitboxes
+    if (room.npcs) {
+      for (const n of room.npcs) {
+        ctx.strokeStyle = '#08f'; ctx.lineWidth = 1;
+        ctx.strokeRect(n.x, n.y, T * 0.7, T * 0.9);
+        // Interaction range
+        const interactRange = T * 1.8;
+        ctx.strokeStyle = 'rgba(0, 120, 255, 0.15)';
+        ctx.beginPath(); ctx.arc(n.x + T*0.35, n.y + T*0.45, interactRange, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    // Door hitboxes
+    for (const door of room.doors) {
+      ctx.strokeStyle = door.locked && !game.officeDoorUnlocked ? '#f44' : '#ff0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(door.x * T, door.y * T, T, T);
+      ctx.fillStyle = ctx.strokeStyle; ctx.font = '8px monospace';
+      ctx.fillText(door.label, door.x * T, door.y * T - 2);
+      ctx.lineWidth = 1;
+    }
+    // Win tiles
+    if (room.winTiles) {
+      for (let i = 0; i < room.winTiles.length; i++) {
+        const wt = room.winTiles[i];
+        const isOccupied = game.occupiedCubicle === i;
+        ctx.strokeStyle = isOccupied ? '#f44' : '#4f4';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wt.x * T, wt.y * T, T, T);
+        ctx.fillStyle = ctx.strokeStyle; ctx.font = 'bold 10px monospace';
+        ctx.fillText(isOccupied ? 'BLOCKED' : 'WIN', wt.x * T + 4, wt.y * T + T/2);
+        ctx.lineWidth = 1;
+      }
+    }
+  }
+
+  // FPS counter
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(canvas.width - 70, canvas.height - 20, 70, 20);
+  ctx.fillStyle = DEBUG.fps > 55 ? '#4f4' : DEBUG.fps > 30 ? '#ff0' : '#f44';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(`${DEBUG.fps} FPS`, canvas.width - 62, canvas.height - 6);
+
+  // God mode indicator
+  if (DEBUG.godMode) {
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.8)'; ctx.font = 'bold 12px monospace';
+    ctx.fillText('GOD MODE', 8, canvas.height - 52);
+  }
+  if (DEBUG.freezeTime) {
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.8)'; ctx.font = 'bold 12px monospace';
+    ctx.fillText('TIME FROZEN', 8, canvas.height - 38);
+  }
+  if (DEBUG.slowMo) {
+    ctx.fillStyle = 'rgba(192, 132, 252, 0.8)'; ctx.font = 'bold 12px monospace';
+    ctx.fillText('SLOW-MO', 8, canvas.height - 24);
+  }
+}
+
+// ===== DEBUG PANEL UPDATE =====
+function updateDebugPanel() {
+  if (game.frameCount % 6 !== 0) return; // update every 6 frames for performance
+
+  const panel = document.getElementById('debugPanel');
+  const room = rooms[game.currentRoom];
+
+  // Track state changes
+  if (game.state !== DEBUG.lastState) {
+    debugLog(`State: ${DEBUG.lastState} → ${game.state}`, 'event');
+    DEBUG.lastState = game.state;
+    DEBUG.stateChanges++;
+  }
+  if (game.currentRoom !== DEBUG.lastRoom) {
+    debugLog(`Room: ${DEBUG.lastRoom} → ${game.currentRoom}`, 'event');
+    DEBUG.lastRoom = game.currentRoom;
+  }
+
+  const row = (label, value, cls = '') =>
+    `<div class="debug-row"><span class="debug-label">${label}</span><span class="debug-value ${cls}">${value}</span></div>`;
+
+  const workPct = Math.floor(game.workMeter);
+  const toiletPct = Math.floor(game.toiletMeter);
+  const timeMin = Math.floor(game.time / 60);
+  const timeSec = Math.floor(game.time % 60);
+
+  let html = '';
+
+  // Game State
+  html += '<h2>GAME STATE</h2>';
+  html += row('State', game.state);
+  html += row('Level', game.level + (game.mode === 'freeroam' ? ' (Free Roam)' : ''));
+  html += row('Room', game.currentRoom);
+  html += row('Frame', game.frameCount);
+  html += row('State Changes', DEBUG.stateChanges);
+
+  // Player
+  html += '<h2>PLAYER</h2>';
+  html += row('Position', `${Math.floor(player.x)}, ${Math.floor(player.y)}`);
+  html += row('Tile', `${Math.floor((player.x + player.w/2) / T)}, ${Math.floor((player.y + player.h/2) / T)}`);
+  html += row('Velocity', `${player.vx.toFixed(2)}, ${player.vy.toFixed(2)}`);
+  html += row('Facing', player.facing);
+  html += row('Walking', player.walking);
+  html += row('Sneaking', player.sneaking);
+  html += row('Hiding', player.isHiding);
+  html += row('Stamina', `${Math.floor(player.stamina)}/${player.maxStamina}`);
+  html += row('Can Interact', player.canInteract ? `${player.canInteract.type}` : 'none');
+  html += row('Inventory', player.inventory.map((s, i) => s ? s.name : `[${i+1}]empty`).join(', '));
+
+  // Meters
+  html += '<h2>METERS</h2>';
+  html += row('Time', `${timeMin}:${timeSec.toString().padStart(2, '0')}`,
+    game.time < 60 ? 'crit' : game.time < 120 ? 'warn' : '');
+  html += row('Work', `${workPct}/${game.maxWork} (need ${game.workThreshold})`,
+    workPct >= game.workThreshold ? 'good' : workPct > 30 ? 'warn' : '');
+  html += row('Toilet', `${toiletPct}/${game.maxToilet}`,
+    toiletPct > 80 ? 'crit' : toiletPct > 50 ? 'warn' : '');
+  html += row('Door', game.officeDoorUnlocked ? 'UNLOCKED' : 'LOCKED',
+    game.officeDoorUnlocked ? 'good' : 'warn');
+  html += row('Salt Ammo', `${game.saltAmmo}/${game.saltMax}`);
+  html += row('Gold', game.gold);
+
+  // Boosts
+  html += '<h2>ACTIVE EFFECTS</h2>';
+  html += row('Coffee Boost', player._coffeeBoost > 0 ? `${player._coffeeBoost.toFixed(1)}s` : 'none',
+    player._coffeeBoost > 0 ? 'good' : '');
+  html += row('Headphones', player._headphoneTimer > 0 ? `${player._headphoneTimer.toFixed(1)}s` : 'none',
+    player._headphoneTimer > 0 ? 'good' : '');
+  html += row('Imodium', player.imodiumTimer > 0 ? `${player.imodiumTimer.toFixed(1)}s` : 'none',
+    player.imodiumTimer > 0 ? 'good' : '');
+  html += row('E-Drink Work', game.energyDrinkWorkTimer > 0 ? `${game.energyDrinkWorkTimer.toFixed(1)}s` : 'none',
+    game.energyDrinkWorkTimer > 0 ? 'good' : '');
+  html += row('E-Drink Toilet', game.energyDrinkToiletTimer > 0 ? `${game.energyDrinkToiletTimer.toFixed(1)}s` : 'none',
+    game.energyDrinkToiletTimer > 0 ? 'crit' : '');
+  html += row('isWorking (dead)', game.isWorking ? 'TRUE' : 'false',
+    game.isWorking ? 'crit' : '');
+
+  // Enemies
+  html += '<h2>ENEMIES</h2>';
+  if (room.enemies && room.enemies.length > 0) {
+    for (const e of room.enemies) {
+      const dist = Math.floor(Math.hypot(player.x - e.x, player.y - e.y));
+      const state = e.dead ? 'DEAD' : e.distracted ? 'DISTRACTED' : (e.alertState || 'patrol');
+      const cls = e.dead ? '' : state === 'hunting' ? 'crit' : state === 'suspicious' ? 'warn' : '';
+      html += row(`${e.name}`, `${state} | HP:${e.hp}/${e.maxHp} | dist:${dist}`, cls);
+    }
+  } else {
+    html += row('(none)', '-');
+  }
+
+  // NPCs
+  html += '<h2>NPCs</h2>';
+  if (room.npcs && room.npcs.length > 0) {
+    for (const n of room.npcs) {
+      const dist = Math.floor(Math.hypot(player.x - n.x, player.y - n.y));
+      const flags = [n.sleeping ? 'ZZZ' : '', n.chasePlayer ? 'CHASE' : '', n.roaming ? 'ROAM' : ''].filter(Boolean).join(',');
+      html += row(`${n.name}`, `${n.interactType} | dist:${dist} | ${flags || 'static'}`);
+    }
+  } else {
+    html += row('(none)', '-');
+  }
+
+  // Work Question (if active)
+  if (game.workQuestion) {
+    html += '<h2>WORK MINI-GAME</h2>';
+    const wq = game.workQuestion;
+    html += row('Question', wq.text);
+    html += row('Answer', wq.answer, 'good');
+    html += row('Timer', wq.timer.toFixed(1) + 's', wq.timer < 2 ? 'crit' : wq.timer < 3.5 ? 'warn' : '');
+    html += row('Selected', `[${wq.selectedIndex}] ${wq.options[wq.selectedIndex]}`);
+    html += row('Answered', wq.answered ? (wq.correct ? 'CORRECT' : 'WRONG') : 'pending',
+      wq.answered ? (wq.correct ? 'good' : 'crit') : '');
+  }
+
+  // Quests
+  if (game.quests && game.quests.length > 0) {
+    html += '<h2>QUESTS</h2>';
+    for (const q of game.quests) {
+      html += row(q.name, q.completed ? 'DONE' : 'active', q.completed ? 'good' : 'warn');
+    }
+  }
+
+  // Events
+  html += '<h2>EVENTS</h2>';
+  html += row('Current Event', game.currentEvent ? `${game.currentEvent.type} (${game.currentEvent.timer.toFixed(1)}s)` : 'none');
+  html += row('Email Timer', game.emailTimer.toFixed(1) + 's');
+  html += row('Random Event Timer', game.randomEventTimer.toFixed(1) + 's');
+  html += row('Quip Timer', game.quipTimer.toFixed(1) + 's');
+  html += row('Speech Bubbles', game.speechBubbles.length);
+  html += row('Email Notifs', game.emailNotifications.length);
+  html += row('Room Transition', game.roomTransition ? `${game.roomTransition.phase} (${game.roomTransition.timer.toFixed(2)}s)` : 'none');
+
+  panel.innerHTML = html;
+}
+
+function updateDebugLog() {
+  if (game.frameCount % 12 !== 0) return;
+  const logDiv = document.getElementById('debugLog');
+  let html = '<div class="section-label">EVENT LOG (' + DEBUG.log.length + ' entries)</div>';
+  const show = DEBUG.log.slice(0, 50);
+  for (const entry of show) {
+    html += `<div class="log-entry"><span class="log-time">[${entry.time} F:${entry.frame}]</span> <span class="log-${entry.type}">${entry.msg}</span></div>`;
+  }
+  logDiv.innerHTML = html;
+}
+
+// ===== PATCHED GAME LOOP =====
+let lastTime = 0;
+function gameLoop(timestamp) {
+  let dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  if (DEBUG.slowMo) dt *= 0.25;
+  lastTime = timestamp;
+  game.frameCount++;
+
+  // FPS tracking
+  DEBUG.fpsAccum += dt;
+  DEBUG.fpsCount++;
+  if (timestamp - DEBUG.lastFpsUpdate > 500) {
+    DEBUG.fps = Math.round(DEBUG.fpsCount / DEBUG.fpsAccum);
+    DEBUG.fpsAccum = 0; DEBUG.fpsCount = 0;
+    DEBUG.lastFpsUpdate = timestamp;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const k in justPressed) delete justPressed[k];
+
+  switch (game.state) {
+    case 'title':
+      drawTitle();
+      break;
+    case 'paused':
+    case 'playing':
+    case 'interact':
+    case 'fridgeMenu':
+    case 'npcMenu':
+    case 'vendorMenu':
+    case 'dialogueChoice':
+    case 'questLog':
+    case 'workScreen':
+      if (game.state === 'playing') {
+        updateRoomTransition(dt);
+        updatePlayer(dt);
+        updateEnemies(dt);
+        updateNpcMovement(dt);
+        updateSaltProjectiles(dt);
+        updatePaperBalls(dt);
+        updateTimers(dt);
+        updateQuips(dt);
+        updateRandomEvents(dt);
+        updateEmailNotifications(dt);
+      }
+      if (game.state === 'workScreen') {
+        updateWorkScreen(dt);
+        updateTimers(dt);
+      }
+      drawRoom();
+      const room = rooms[game.currentRoom];
+      if (room.items) room.items.forEach(drawItem);
+      if (room.enemies) room.enemies.forEach(drawEnemy);
+      if (room.npcs) room.npcs.forEach(drawNPC);
+      drawSaltProjectiles();
+      drawPaperBalls();
+      drawPlayer();
+      drawUI();
+      drawEffects();
+      drawInteractionHints();
+      drawSpeechBubbles();
+      drawEventOverlay();
+      drawEmailNotifications();
+      if (game.state === 'interact') drawDialogue();
+      if (game.state === 'dialogueChoice') drawDialogueChoice();
+      if (game.state === 'fridgeMenu') drawFridgeMenu();
+      if (game.state === 'npcMenu') drawNpcMenu();
+      if (game.state === 'vendorMenu') drawVendorMenu();
+      if (game.state === 'questLog') drawQuestLog();
+      if (game.state === 'workScreen') drawWorkScreen();
+      if (game.state === 'paused') drawPauseMenu();
+      drawRoomTransition();
+      break;
+    case 'pub':
+      drawPubScreen();
+      break;
+    case 'win':
+      drawWinScreen();
+      break;
+  }
+
+  // Debug overlay on top
+  debugDrawOverlay();
+  updateDebugPanel();
+  updateDebugLog();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Start the debug game loop (replaces main.js loop)
+debugLog('Debug mode initialized', 'event');
+debugLog('Game loaded — select a level to start', 'info');
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

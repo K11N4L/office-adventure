@@ -248,65 +248,6 @@ function drawInteractionHints() {
   }
 }
 
-// --- WORK OVERLAY ---
-function drawWorkOverlay() {
-  const W = canvas.width, H = canvas.height;
-  const pct = Math.floor(game.workMeter);
-  const needed = game.workThreshold;
-  const ratio = game.workMeter / game.maxWork;
-
-  // Dark overlay
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.fillRect(0, 0, W, H);
-
-  // Central work panel
-  const panelW = 380, panelH = 140;
-  const px = W / 2 - panelW / 2, py = H / 2 - panelH / 2 - 20;
-  drawPixelRect(px, py, panelW, panelH, 'rgba(0, 20, 40, 0.9)');
-  ctx.strokeStyle = '#4a6a9a'; ctx.lineWidth = 2;
-  ctx.strokeRect(px, py, panelW, panelH);
-  ctx.lineWidth = 1;
-
-  ctx.textAlign = 'center';
-
-  // "WORKING..." title with animated dots
-  const dots = '.'.repeat((Math.floor(game.frameCount / 20) % 3) + 1);
-  ctx.fillStyle = '#6ab4ff'; ctx.font = 'bold 18px monospace';
-  ctx.fillText('WORKING' + dots, W / 2, py + 30);
-
-  // Task text
-  if (game.workTask) {
-    ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
-    ctx.fillText(game.workTask, W / 2, py + 50);
-  }
-
-  // Progress bar
-  const barW = 300, barH = 20;
-  const barX = W / 2 - barW / 2, barY = py + 65;
-  drawPixelRect(barX, barY, barW, barH, '#1a1a2a');
-  const fillW = barW * ratio;
-  const barColor = pct >= needed ? '#4a8' : '#4a6a9a';
-  if (fillW > 0) drawPixelRect(barX, barY, fillW, barH, barColor);
-  ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
-  ctx.strokeRect(barX, barY, barW, barH);
-
-  // Percentage text
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px monospace';
-  ctx.fillText(pct + '% / ' + needed + '% needed', W / 2, barY + barH + 20);
-
-  // Energy drink boost indicator
-  if (game.energyDrinkWorkTimer > 0) {
-    ctx.fillStyle = '#2a8a2a'; ctx.font = '11px monospace';
-    ctx.fillText('ENERGY BOOST! (' + Math.ceil(game.energyDrinkWorkTimer) + 's)', W / 2, barY + barH + 38);
-  }
-
-  // Hold E hint
-  ctx.fillStyle = '#666'; ctx.font = '10px monospace';
-  ctx.fillText('Hold [E] to keep working...', W / 2, py + panelH - 10);
-
-  ctx.textAlign = 'left';
-}
-
 // --- ROOM TRANSITIONS ---
 function updateRoomTransition(dt) {
   if (!game.roomTransition) return;

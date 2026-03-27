@@ -395,9 +395,30 @@ function updateNpcMovement(dt) {
         const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
         if (dist < npc.autoRange && !player.isHiding) {
           npc.interacted = true;
-          game.time -= 30;
           game.state = 'interact';
-          game.dialogueQueue = [...npc.dialogue];
+          game.dialogueQueue = [
+            ...npc.dialogue,
+            {
+              prompt: "Karen wants to schedule a meeting about the meeting...",
+              choices: [
+                { label: "Politely decline", next: [
+                  "Brayden: I'm really sorry Karen, I've got a deadline.",
+                  "Karen: A DEADLINE? We need to discuss deadline management!",
+                  "*You escaped with only 15 seconds lost.*"
+                ], effect: { timeLoss: 15 } },
+                { label: "Run away", next: [
+                  "Brayden: Sorry gotta go bye!",
+                  "*Karen is offended. She'll remember this...*"
+                ], effect: { timeLoss: 5 } },
+                { label: "Accept the meeting", next: [
+                  "Karen: Perfect! I'll send a Teams invite for tomorrow at...",
+                  "Karen: ...actually, let me check everyone's calendar...",
+                  "Karen: ...hmm, Wednesday works, no wait...",
+                  "*You stood there for 45 seconds while Karen checked calendars.*"
+                ], effect: { timeLoss: 45 } }
+              ]
+            }
+          ];
           game.currentDialogue = game.dialogueQueue.shift();
           return;
         }
@@ -406,9 +427,24 @@ function updateNpcMovement(dt) {
         const dist = Math.hypot(player.x - npc.x, player.y - npc.y);
         if (dist < npc.autoRange && !player.isHiding) {
           npc.storyActive = true;
-          game.time -= 30;
           game.state = 'interact';
-          game.dialogueQueue = [...npc.dialogue];
+          game.dialogueQueue = [
+            ...npc.dialogue,
+            {
+              prompt: "Greg is still talking... what do you do?",
+              choices: [
+                { label: "Politely listen", next: [
+                  "Greg: ...and THAT'S why you never trust a man with two watches.",
+                  "*Greg talked your ear off. Lost 30 seconds!*"
+                ], effect: { timeLoss: 30 } },
+                { label: "Walk away mid-story", next: [
+                  "Brayden: Sorry Greg, gotta run!",
+                  "Greg: ...but I hadn't got to the punchline yet!",
+                  "*You escaped but still lost 10 seconds.*"
+                ], effect: { timeLoss: 10 } }
+              ]
+            }
+          ];
           game.currentDialogue = game.dialogueQueue.shift();
           return;
         }
